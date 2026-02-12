@@ -1,0 +1,23 @@
+# Build directories
+Debug/
+Release/
+
+# Toolchain-generated files
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.d
+*.su
+
+# IDE local state
+.settings/
+*.launch
+
+# CubeMX backup files
+/Middlewares/ST/ARM/DSP/
+
+# OS generated files
+.DS_Store
+Thumbs.db
