@@ -63,7 +63,9 @@ void Error_Handler(void);
 #define STLINK_TX_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
-
+#define RX_BUF_SIZE 1536
+#define RX_BUF_CNT  12
+#define TX_BUF_SIZE 1536
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

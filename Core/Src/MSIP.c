@@ -2,27 +2,27 @@
 
 #include "string.h"
 #include "stm32h7xx_hal_def.h"
+#include "main.h"
+
+#define htons(x) __builtin_bswap16(x) // Converts unsigned short integer from host byte order (little endian) to network byte order (big endian)
+#define ntohs(x) __builtin_bswap16(x) // Converts unsigned short integer from network byte order (big endian) to host byte order (little endian)
 
 static uint8_t ipaddr[4] = {192, 168, 0, 100};
 static ETH_BufferTypeDef Txbuffer;
 
 extern ETH_TxPacketConfig TxConfig;
 extern ETH_HandleTypeDef heth;
-extern uint8_t Tx_Buff[1536]; // TODO: temporary magic number
+extern uint8_t Tx_Buff[TX_BUF_SIZE];
 
 static void __ProcessARPPacket(uint8_t *payload);
 static void __ProcessUnhandledPacket(uint8_t *payload);
 static uint8_t* __PrepareETHFrame(uint8_t dst[6], uint8_t src[6], uint16_t ethertype);
 static HAL_StatusTypeDef __ETH_SendFrame_IT(uint8_t *buffer, uint16_t length);
 
-// Byte-swapping (endianness reversal)
-static inline uint16_t swap16(uint16_t value) {
-    return (value << 8) | (value >> 8);
-}
 
 void MSIP_ProcessETHFrame(uint8_t *frame) {
 	ETH_FrameHeader *header = (ETH_FrameHeader*) frame;
-	uint16_t ethertype = swap16(header->ethertype);
+	uint16_t ethertype = ntohs(header->ethertype);
 	uint8_t *payload = frame + sizeof(ETH_FrameHeader);
 
 	static uint32_t packetsReceived = 0;
@@ -41,18 +41,18 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 
 static inline void __ProcessARPPacket(uint8_t *payload) {
 	ARP_Packet *rxPacket = (ARP_Packet*) payload;
-	uint16_t oper = swap16(rxPacket->oper);
+	uint16_t oper = ntohs(rxPacket->oper);
 
 	if (oper != 1) {
-		return; // Only handle ARP requests
+		return; // Only process ARP requests
 	}
 
-	ARP_Packet *txPacket = (ARP_Packet*) __PrepareETHFrame(rxPacket->sha, heth.Init.MACAddr, swap16(0x0806));
-	txPacket->htype = swap16(1);
-	txPacket->ptype = swap16(0x0800);
+	ARP_Packet *txPacket = (ARP_Packet*) __PrepareETHFrame(rxPacket->sha, heth.Init.MACAddr, htons(0x0806));
+	txPacket->htype = htons(1);
+	txPacket->ptype = htons(0x0800);
 	txPacket->hlen  = 6;
 	txPacket->plen  = 4;
-	txPacket->oper  = swap16(2);
+	txPacket->oper  = htons(2);
 	memcpy(txPacket->sha, heth.Init.MACAddr, 6);
 	memcpy(txPacket->spa, ipaddr, 4);
 	memcpy(txPacket->tha, rxPacket->sha, 6);

@@ -32,9 +32,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define RX_BUF_SIZE 1536
-#define RX_BUF_CNT  12
-#define TX_BUF_SIZE 1536
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
