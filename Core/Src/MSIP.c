@@ -1,25 +1,35 @@
 #include "MSIP.h"
 
+/* Private includes ----------------------------------------------------------*/
 #include "string.h"
 #include "stm32h7xx_hal_def.h"
 #include "main.h"
 
+/* Private macros ------------------------------------------------------------*/
 #define htons(x) __builtin_bswap16(x) // Converts unsigned short integer from host byte order (little endian) to network byte order (big endian)
 #define ntohs(x) __builtin_bswap16(x) // Converts unsigned short integer from network byte order (big endian) to host byte order (little endian)
 
+/* Private defines -----------------------------------------------------------*/
+#define ETHERTYPE_IPv4  0x0800
+#define ETHERTYPE_ARP   0x0806
+
+/* Private variables ---------------------------------------------------------*/
 static uint8_t ipaddr[4] = {192, 168, 0, 100};
 static ETH_BufferTypeDef Txbuffer;
 
+/* External variables --------------------------------------------------------*/
 extern ETH_TxPacketConfig TxConfig;
 extern ETH_HandleTypeDef heth;
 extern uint8_t Tx_Buff[TX_BUF_SIZE];
 
+/* Private function prototypes -----------------------------------------------*/
+static void __ProcessIPv4Packet(uint8_t *payload);
 static void __ProcessARPPacket(uint8_t *payload);
 static void __ProcessUnhandledPacket(uint8_t *payload);
 static uint8_t* __PrepareETHFrame(uint8_t dst[6], uint8_t src[6], uint16_t ethertype);
-static HAL_StatusTypeDef __ETH_SendFrame_IT(uint8_t *buffer, uint16_t length);
+static HAL_StatusTypeDef __SendETHFrame(uint8_t *buffer, uint16_t length);
 
-
+/* Private function definitions  ---------------------------------------------*/
 void MSIP_ProcessETHFrame(uint8_t *frame) {
 	ETH_FrameHeader *header = (ETH_FrameHeader*) frame;
 	uint16_t ethertype = ntohs(header->ethertype);
@@ -29,7 +39,11 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 	packetsReceived++;
 
 	switch (ethertype) {
-	case 0x0806:
+	case ETHERTYPE_IPv4:
+		__ProcessIPv4Packet(payload);
+		break;
+
+	case ETHERTYPE_ARP:
 		__ProcessARPPacket(payload);
 		break;
 
@@ -37,6 +51,10 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 		__ProcessUnhandledPacket(payload);
 		break;
 	}
+}
+
+static inline void __ProcessIPv4Packet(uint8_t *payload) {
+	IPv4_Packet *rxPacket = (IPv4_Packet*) payload;
 }
 
 static inline void __ProcessARPPacket(uint8_t *payload) {
@@ -47,7 +65,7 @@ static inline void __ProcessARPPacket(uint8_t *payload) {
 		return; // Only process ARP requests
 	}
 
-	ARP_Packet *txPacket = (ARP_Packet*) __PrepareETHFrame(rxPacket->sha, heth.Init.MACAddr, htons(0x0806));
+	ARP_Packet *txPacket = (ARP_Packet*) __PrepareETHFrame(rxPacket->sha, heth.Init.MACAddr, htons(ETHERTYPE_ARP));
 	txPacket->htype = htons(1);
 	txPacket->ptype = htons(0x0800);
 	txPacket->hlen  = 6;
@@ -58,11 +76,11 @@ static inline void __ProcessARPPacket(uint8_t *payload) {
 	memcpy(txPacket->tha, rxPacket->sha, 6);
 	memcpy(txPacket->tpa, rxPacket->spa, 4);
 
-	__ETH_SendFrame_IT((uint8_t*) Tx_Buff, sizeof(ETH_FrameHeader) + sizeof(ARP_Packet));
+	__SendETHFrame((uint8_t*) Tx_Buff, sizeof(ETH_FrameHeader) + sizeof(ARP_Packet));
 }
 
 static inline void __ProcessUnhandledPacket(uint8_t *payload) {
-	volatile uint8_t a = 2;
+	volatile uint8_t a = 0;
 }
 
 static inline uint8_t* __PrepareETHFrame(uint8_t dst[6], uint8_t src[6], uint16_t ethertype) {
@@ -73,7 +91,7 @@ static inline uint8_t* __PrepareETHFrame(uint8_t dst[6], uint8_t src[6], uint16_
 	return Tx_Buff + sizeof(ETH_FrameHeader);
 }
 
-static inline HAL_StatusTypeDef __ETH_SendFrame_IT(uint8_t *buffer, uint16_t length) {
+static inline HAL_StatusTypeDef __SendETHFrame(uint8_t *buffer, uint16_t length) {
     Txbuffer.buffer = buffer;
     Txbuffer.len = length;
     Txbuffer.next = NULL;

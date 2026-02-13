@@ -6,21 +6,49 @@
 #include "stm32h7xx_hal_eth.h"
 
 typedef struct __attribute__((packed)) {
-	uint8_t dst[6];
-	uint8_t src[6];
+	uint8_t dst[6];		// MAC destination
+	uint8_t src[6];		// MAC source
 	uint16_t ethertype;
 } ETH_FrameHeader;
 
 typedef struct __attribute__((packed)) {
-	uint16_t htype;
-	uint16_t ptype;
-	uint8_t hlen;
-	uint8_t plen;
-	uint16_t oper;
-	uint8_t sha[6];
-	uint8_t spa[4];
-	uint8_t tha[6];
-	uint8_t tpa[4];
+	// BEGIN FIELD ORDER REVERSAL (LITTLE ENDIAN)
+	uint8_t ihl: 4;					// Internet Header Length
+	uint8_t version: 4;				// Version (4)
+	// END FIELD ORDER REVERSAL (LITTLE ENDIAN)
+
+	// BEGIN FIELD ORDER REVERSAL (LITTLE ENDIAN)
+	uint8_t ecn: 2;					// Explicit Congestion Notification
+	uint8_t dscp: 6;				// Differentiated Services Code Point
+	// END FIELD ORDER REVERSAL (LITTLE ENDIAN)
+
+	uint16_t len;					// Total Length
+	uint16_t id;
+
+	// BEGIN FIELD ORDER REVERSAL (LITTLE ENDIAN)
+	uint16_t fragOff: 13;			// Fragment Offset
+	uint16_t flags: 3;				// Flags (R: Reserved | DF: Don't Fragment | MF: More Fragments)
+	// END FIELD ORDER REVERSAL (LITTLE ENDIAN)
+
+	uint8_t ttl;					// Time to live
+	uint8_t protocol;
+	uint16_t checksum;				// Header Checksum
+	uint32_t src;					// Source Address
+	uint32_t dest;					// Destination Address
+
+	// Options field not included as its length is variable (0-320 bits)
+} IPv4_Packet;
+
+typedef struct __attribute__((packed)) {
+	uint16_t htype;		// Hardware type
+	uint16_t ptype;		// Protocol type
+	uint8_t hlen;		// Hardware Address Length
+	uint8_t plen;		// Protocol Address Length
+	uint16_t oper;		// Operation
+	uint8_t sha[6];		// Sender Hardware Address
+	uint8_t spa[4];		// Sender Protocol Address
+	uint8_t tha[6];		// Target Hardware Address
+	uint8_t tpa[4];		// Target Protocol Address
 } ARP_Packet;
 
 void MSIP_ProcessETHFrame(uint8_t *frame);

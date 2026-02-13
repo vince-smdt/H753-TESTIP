@@ -295,7 +295,7 @@ void HAL_ETH_RxLinkCallback(void **pStart, void **pEnd, uint8_t *buff, uint16_t 
 
 void HAL_ETH_TxCpltCallback(ETH_HandleTypeDef *heth)
 {
-	volatile uint8_t a = 1;
+	volatile uint8_t a = 0;
 }
 
 void HAL_ETH_RxCpltCallback(ETH_HandleTypeDef *heth)
