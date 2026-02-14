@@ -13,9 +13,11 @@
 #define MAKE_IPV4_ADDR(b1, b2, b3, b4) ((uint32_t)(b4) | ((uint32_t)(b3) << 8) | ((uint32_t)(b2) << 16) | ((uint32_t)(b1) << 24))
 
 /* Private defines -----------------------------------------------------------*/
-#define ETHERTYPE_IPV4  0x0800
-#define ETHERTYPE_ARP   0x0806
+#define ETHERTYPE_IPV4  	0x0800
+#define ETHERTYPE_ARP   	0x0806
 #define IPV4_PROTOCOL_ICMP	1
+#define ICMP_TYPE_ECHO		8
+#define ICMP_CODE_ECHO		0
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t ipaddr = MAKE_IPV4_ADDR(192, 168, 0, 100);
@@ -27,11 +29,13 @@ extern ETH_HandleTypeDef heth;
 extern uint8_t Tx_Buff[TX_BUF_SIZE];
 
 /* Private function prototypes -----------------------------------------------*/
-static void __ProcessIPV4Packet(uint8_t *payload);
-static void __ProcessICMPPacket(uint8_t *payload);
-static void __ProcessUnhandledIPV4Packet(uint8_t *payload);
-static void __ProcessARPPacket(uint8_t *payload);
-static void __ProcessUnhandledPacket(uint8_t *payload);
+static void __ProcessIPV4Packet(uint8_t *packet);
+static void __ProcessICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket);
+static void __ProcessICMPEchoPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket);
+static void __ProcessUnhandledICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket);
+static void __ProcessUnhandledIPV4Packet(uint8_t *packet);
+static void __ProcessARPPacket(uint8_t *packet);
+static void __ProcessUnhandledPacket(uint8_t *packet);
 static uint8_t* __PrepareETHFrame(uint8_t dst[6], uint8_t src[6], uint16_t ethertype);
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buffer, uint16_t length);
 
@@ -59,8 +63,8 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 	}
 }
 
-static inline void __ProcessIPV4Packet(uint8_t *payload) {
-	IPV4_Packet *rxPacket = (IPV4_Packet*) payload;
+static inline void __ProcessIPV4Packet(uint8_t *packet) {
+	IPV4_Packet *rxPacket = (IPV4_Packet*) packet;
 	uint32_t dest = ntohl(rxPacket->dest);
 
 	if (dest != ipaddr) {
@@ -71,27 +75,51 @@ static inline void __ProcessIPV4Packet(uint8_t *payload) {
 		return; // Options currently not supported
 	}
 
+	uint8_t* payload = packet + sizeof(IPV4_Packet);
+
 	switch (rxPacket->protocol) {
 	case IPV4_PROTOCOL_ICMP:
-		__ProcessICMPPacket(payload);
+		__ProcessICMPPacket(packet, payload);
 		break;
 
 	default:
-		__ProcessUnhandledIPV4Packet(payload);
+		__ProcessUnhandledIPV4Packet(packet);
 		break;
 	}
 }
 
-static inline void __ProcessICMPPacket(uint8_t *payload) {
+static inline void __ProcessICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket) {
+	ICMP_Packet *rxIcmpPacket = (ICMP_Packet*) icmpPacket;
+
+	switch (rxIcmpPacket->type) {
+	case ICMP_TYPE_ECHO:
+		__ProcessICMPEchoPacket(ipv4Packet, icmpPacket);
+		break;
+
+	default:
+		__ProcessUnhandledICMPPacket(ipv4Packet, icmpPacket);
+		break;
+	}
+}
+
+static inline void __ProcessICMPEchoPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket) {
+	ICMP_Echo_Packet *rxIcmpEchoPacket = (ICMP_Echo_Packet*) icmpPacket;
+
+	if (rxIcmpEchoPacket->code != 0) {
+		return; // Invalid code for echo message
+	}
+}
+
+static inline void __ProcessUnhandledICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket) {
 	volatile uint8_t a = 0;
 }
 
-static inline void __ProcessUnhandledIPV4Packet(uint8_t *payload) {
+static inline void __ProcessUnhandledIPV4Packet(uint8_t *packet) {
 	volatile uint8_t a = 0;
 }
 
-static inline void __ProcessARPPacket(uint8_t *payload) {
-	ARP_Packet *rxPacket = (ARP_Packet*) payload;
+static inline void __ProcessARPPacket(uint8_t *packet) {
+	ARP_Packet *rxPacket = (ARP_Packet*) packet;
 	uint32_t tpa = ntohl(rxPacket->tpa);
 	uint16_t oper = ntohs(rxPacket->oper);
 
@@ -117,7 +145,7 @@ static inline void __ProcessARPPacket(uint8_t *payload) {
 	__SendETHFrame((uint8_t*) Tx_Buff, sizeof(ETH_FrameHeader) + sizeof(ARP_Packet));
 }
 
-static inline void __ProcessUnhandledPacket(uint8_t *payload) {
+static inline void __ProcessUnhandledPacket(uint8_t *packet) {
 	volatile uint8_t a = 0;
 }
 

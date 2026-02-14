@@ -25,10 +25,10 @@ typedef struct __attribute__((packed)) {
 	uint16_t len;					// Total Length
 	uint16_t id;
 
-	// BEGIN FIELD ORDER REVERSAL (LITTLE ENDIAN BITFIELD PACKING)
-	uint16_t offset: 13;			// Fragment Offset
-	uint16_t flags: 3;				// Flags (R: Reserved | DF: Don't Fragment | MF: More Fragments)
-	// END FIELD ORDER REVERSAL (LITTLE ENDIAN BITFIELD PACKING)
+	// Contains the fields listed below
+	// (3 bits)		Flags (R: Reserved | DF: Don't Fragment | MF: More Fragments)
+	// (13 bits)	Fragment Offset
+	uint16_t offset;
 
 	uint8_t ttl;					// Time to live
 	uint8_t protocol;
@@ -44,6 +44,14 @@ typedef struct __attribute__((packed)) {
 	uint8_t code;
 	uint16_t checksum;
 } ICMP_Packet;
+
+typedef struct __attribute__((packed)) {
+	uint8_t type;
+	uint8_t code;
+	uint16_t checksum;
+	uint16_t id;		// Identifier
+	uint16_t seq;		// Sequence Number
+} ICMP_Echo_Packet;
 
 typedef struct __attribute__((packed)) {
 	uint16_t htype;		// Hardware type
