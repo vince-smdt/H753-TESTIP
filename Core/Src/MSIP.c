@@ -6,15 +6,19 @@
 #include "main.h"
 
 /* Private macros ------------------------------------------------------------*/
-#define htons(x) __builtin_bswap16(x) // Converts unsigned short integer from host byte order (little endian) to network byte order (big endian)
-#define ntohs(x) __builtin_bswap16(x) // Converts unsigned short integer from network byte order (big endian) to host byte order (little endian)
+#define htons(x) __builtin_bswap16(x) 	// Converts unsigned short integer from host byte order (little endian) to network byte order (big endian)
+#define ntohs(x) __builtin_bswap16(x) 	// Converts unsigned short integer from network byte order (big endian) to host byte order (little endian)
+#define htonl(x) __builtin_bswap32(x)	// Converts unsigned long integer from host byte order (little endian) to network byte order (big endian)
+#define ntohl(x) __builtin_bswap32(x)	// Converts unsigned long integer from network byte order (big endian) to host byte order (little endian)
+#define MAKE_IPV4_ADDR(b1, b2, b3, b4) ((uint32_t)(b4) | ((uint32_t)(b3) << 8) | ((uint32_t)(b2) << 16) | ((uint32_t)(b1) << 24))
 
 /* Private defines -----------------------------------------------------------*/
-#define ETHERTYPE_IPv4  0x0800
+#define ETHERTYPE_IPV4  0x0800
 #define ETHERTYPE_ARP   0x0806
+#define IPV4_PROTOCOL_ICMP	1
 
 /* Private variables ---------------------------------------------------------*/
-static uint8_t ipaddr[4] = {192, 168, 0, 100};
+static uint32_t ipaddr = MAKE_IPV4_ADDR(192, 168, 0, 100);
 static ETH_BufferTypeDef Txbuffer;
 
 /* External variables --------------------------------------------------------*/
@@ -23,13 +27,15 @@ extern ETH_HandleTypeDef heth;
 extern uint8_t Tx_Buff[TX_BUF_SIZE];
 
 /* Private function prototypes -----------------------------------------------*/
-static void __ProcessIPv4Packet(uint8_t *payload);
+static void __ProcessIPV4Packet(uint8_t *payload);
+static void __ProcessICMPPacket(uint8_t *payload);
+static void __ProcessUnhandledIPV4Packet(uint8_t *payload);
 static void __ProcessARPPacket(uint8_t *payload);
 static void __ProcessUnhandledPacket(uint8_t *payload);
 static uint8_t* __PrepareETHFrame(uint8_t dst[6], uint8_t src[6], uint16_t ethertype);
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buffer, uint16_t length);
 
-/* Private function definitions  ---------------------------------------------*/
+/* Private function definitions ----------------------------------------------*/
 void MSIP_ProcessETHFrame(uint8_t *frame) {
 	ETH_FrameHeader *header = (ETH_FrameHeader*) frame;
 	uint16_t ethertype = ntohs(header->ethertype);
@@ -39,8 +45,8 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 	packetsReceived++;
 
 	switch (ethertype) {
-	case ETHERTYPE_IPv4:
-		__ProcessIPv4Packet(payload);
+	case ETHERTYPE_IPV4:
+		__ProcessIPV4Packet(payload);
 		break;
 
 	case ETHERTYPE_ARP:
@@ -53,13 +59,45 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 	}
 }
 
-static inline void __ProcessIPv4Packet(uint8_t *payload) {
-	IPv4_Packet *rxPacket = (IPv4_Packet*) payload;
+static inline void __ProcessIPV4Packet(uint8_t *payload) {
+	IPV4_Packet *rxPacket = (IPV4_Packet*) payload;
+	uint32_t dest = ntohl(rxPacket->dest);
+
+	if (dest != ipaddr) {
+		return; // Not addressed to this host
+	}
+
+	if (rxPacket->ihl > 5) {
+		return; // Options currently not supported
+	}
+
+	switch (rxPacket->protocol) {
+	case IPV4_PROTOCOL_ICMP:
+		__ProcessICMPPacket(payload);
+		break;
+
+	default:
+		__ProcessUnhandledIPV4Packet(payload);
+		break;
+	}
+}
+
+static inline void __ProcessICMPPacket(uint8_t *payload) {
+	volatile uint8_t a = 0;
+}
+
+static inline void __ProcessUnhandledIPV4Packet(uint8_t *payload) {
+	volatile uint8_t a = 0;
 }
 
 static inline void __ProcessARPPacket(uint8_t *payload) {
 	ARP_Packet *rxPacket = (ARP_Packet*) payload;
+	uint32_t tpa = ntohl(rxPacket->tpa);
 	uint16_t oper = ntohs(rxPacket->oper);
+
+	if (tpa != ipaddr) {
+		return; // Not addressed to this host
+	}
 
 	if (oper != 1) {
 		return; // Only process ARP requests
@@ -72,9 +110,9 @@ static inline void __ProcessARPPacket(uint8_t *payload) {
 	txPacket->plen  = 4;
 	txPacket->oper  = htons(2);
 	memcpy(txPacket->sha, heth.Init.MACAddr, 6);
-	memcpy(txPacket->spa, ipaddr, 4);
+	txPacket->spa = htonl(ipaddr);
 	memcpy(txPacket->tha, rxPacket->sha, 6);
-	memcpy(txPacket->tpa, rxPacket->spa, 4);
+	txPacket->tpa = rxPacket->spa;
 
 	__SendETHFrame((uint8_t*) Tx_Buff, sizeof(ETH_FrameHeader) + sizeof(ARP_Packet));
 }
