@@ -38,7 +38,8 @@ static void __ProcessUnhandledIPV4Packet(uint8_t *packet);
 static void __ProcessARPPacket(uint8_t *packet);
 static void __ProcessUnhandledPacket(uint8_t *packet);
 static uint8_t* __GetNextTxBuffer();
-static uint8_t* __PrepareETHFrame(uint8_t* txBuffer, uint8_t dst[6], uint16_t ethertype);
+static uint8_t* __PrepareETHFrame(uint8_t* buffer, uint8_t dst[6], uint16_t ethertype);
+static uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buffer, uint8_t protocol, uint32_t dest, uint16_t dataLength);
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buffer, uint16_t length);
 
 /* Private function definitions ----------------------------------------------*/
@@ -110,6 +111,11 @@ static inline void __ProcessICMPEchoPacket(uint8_t *ipv4Packet, uint8_t *icmpPac
 	if (rxIcmpEchoPacket->code != 0) {
 		return; // Invalid code for echo message
 	}
+
+	// uint8_t* txBuffer = __GetNextTxBuffer();
+	// IPV4_Packet *txIpv4Packet = (IPV4_Packet*) __PrepareETHFrame(txBuffer, rxPacket->sha, htons(ETHERTYPE_ARP));
+	// ICMP_Echo_Packet txIcmpEchoPacket = (ICMP_Echo_Packet*) __PrepareIPV4Packet((uint8_t*) txIpv4Packet, IPV4_PROTOCOL_ICMP, )
+
 }
 
 static inline void __ProcessUnhandledICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket) {
@@ -135,7 +141,6 @@ static inline void __ProcessARPPacket(uint8_t *packet) {
 
 	// Send ARP reply
 	uint8_t* txBuffer = __GetNextTxBuffer();
-
 	ARP_Packet *txPacket = (ARP_Packet*) __PrepareETHFrame(txBuffer, rxPacket->sha, htons(ETHERTYPE_ARP));
 	txPacket->htype = htons(1);
 	txPacket->ptype = htons(0x0800);
@@ -160,12 +165,29 @@ static inline uint8_t* __GetNextTxBuffer() {
 	return buffer;
 }
 
-static inline uint8_t* __PrepareETHFrame(uint8_t* txBuffer, uint8_t dst[6], uint16_t ethertype) {
-	ETH_FrameHeader *header = (ETH_FrameHeader*) txBuffer;
+static inline uint8_t* __PrepareETHFrame(uint8_t* buffer, uint8_t dst[6], uint16_t ethertype) {
+	ETH_FrameHeader *header = (ETH_FrameHeader*) buffer;
 	memcpy(header->dst, dst, 6);
 	memcpy(header->src, heth.Init.MACAddr, 6);
 	header->ethertype = ethertype;
-	return txBuffer + sizeof(ETH_FrameHeader);
+	return buffer + sizeof(ETH_FrameHeader);
+}
+
+static inline uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buffer, uint8_t protocol, uint32_t dest, uint16_t dataLength) {
+	IPV4_Packet *packet = (IPV4_Packet*) ipv4Buffer;
+	packet->version = 4;
+	packet->ihl = 5;
+	packet->dscp = 0;
+	packet->ecn = 0;
+	packet->len = htons(sizeof(IPV4_Packet) + dataLength);
+	packet->id = 0;
+	packet->frag = 0;
+	packet->ttl = 64;
+	packet->protocol = protocol;
+	packet->checksum = 0;
+	packet->src = htonl(ipaddr);
+	packet->dest = dest;
+	return ipv4Buffer + sizeof(IPV4_Packet);
 }
 
 static inline HAL_StatusTypeDef __SendETHFrame(uint8_t *buffer, uint16_t length) {

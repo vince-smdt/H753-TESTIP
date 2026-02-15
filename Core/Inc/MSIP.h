@@ -23,7 +23,7 @@ typedef struct __attribute__((packed)) {
 	// END FIELD ORDER REVERSAL (LITTLE ENDIAN BITFIELD PACKING)
 
 	uint16_t len;					// Total Length
-	uint16_t id;
+	uint16_t id;					// Identification
 
 	// Contains the fields listed below
 	// (3 bits)		Flags (R: Reserved | DF: Don't Fragment | MF: More Fragments)
