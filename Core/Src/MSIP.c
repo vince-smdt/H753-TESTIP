@@ -22,11 +22,12 @@
 /* Private variables ---------------------------------------------------------*/
 static uint32_t ipaddr = MAKE_IPV4_ADDR(192, 168, 0, 100);
 static ETH_BufferTypeDef Txbuffer;
+static uint8_t TxPoolBufferIdx = 0;
 
 /* External variables --------------------------------------------------------*/
 extern ETH_TxPacketConfig TxConfig;
 extern ETH_HandleTypeDef heth;
-extern uint8_t Tx_Buff[TX_BUF_SIZE];
+extern uint8_t txPool[TX_BUF_CNT][TX_BUF_SIZE];
 
 /* Private function prototypes -----------------------------------------------*/
 static void __ProcessIPV4Packet(uint8_t *packet);
@@ -36,7 +37,8 @@ static void __ProcessUnhandledICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacke
 static void __ProcessUnhandledIPV4Packet(uint8_t *packet);
 static void __ProcessARPPacket(uint8_t *packet);
 static void __ProcessUnhandledPacket(uint8_t *packet);
-static uint8_t* __PrepareETHFrame(uint8_t dst[6], uint8_t src[6], uint16_t ethertype);
+static uint8_t* __GetNextTxBuffer();
+static uint8_t* __PrepareETHFrame(uint8_t* txBuffer, uint8_t dst[6], uint16_t ethertype);
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buffer, uint16_t length);
 
 /* Private function definitions ----------------------------------------------*/
@@ -131,7 +133,10 @@ static inline void __ProcessARPPacket(uint8_t *packet) {
 		return; // Only process ARP requests
 	}
 
-	ARP_Packet *txPacket = (ARP_Packet*) __PrepareETHFrame(rxPacket->sha, heth.Init.MACAddr, htons(ETHERTYPE_ARP));
+	// Send ARP reply
+	uint8_t* txBuffer = __GetNextTxBuffer();
+
+	ARP_Packet *txPacket = (ARP_Packet*) __PrepareETHFrame(txBuffer, rxPacket->sha, htons(ETHERTYPE_ARP));
 	txPacket->htype = htons(1);
 	txPacket->ptype = htons(0x0800);
 	txPacket->hlen  = 6;
@@ -142,19 +147,25 @@ static inline void __ProcessARPPacket(uint8_t *packet) {
 	memcpy(txPacket->tha, rxPacket->sha, 6);
 	txPacket->tpa = rxPacket->spa;
 
-	__SendETHFrame((uint8_t*) Tx_Buff, sizeof(ETH_FrameHeader) + sizeof(ARP_Packet));
+	__SendETHFrame(txBuffer, sizeof(ETH_FrameHeader) + sizeof(ARP_Packet));
 }
 
 static inline void __ProcessUnhandledPacket(uint8_t *packet) {
 	volatile uint8_t a = 0;
 }
 
-static inline uint8_t* __PrepareETHFrame(uint8_t dst[6], uint8_t src[6], uint16_t ethertype) {
-	ETH_FrameHeader *header = (ETH_FrameHeader*) Tx_Buff;
+static inline uint8_t* __GetNextTxBuffer() {
+	uint8_t *buffer = txPool[TxPoolBufferIdx];
+	TxPoolBufferIdx = (TxPoolBufferIdx + 1) % TX_BUF_CNT;
+	return buffer;
+}
+
+static inline uint8_t* __PrepareETHFrame(uint8_t* txBuffer, uint8_t dst[6], uint16_t ethertype) {
+	ETH_FrameHeader *header = (ETH_FrameHeader*) txBuffer;
 	memcpy(header->dst, dst, 6);
-	memcpy(header->src, src, 6);
+	memcpy(header->src, heth.Init.MACAddr, 6);
 	header->ethertype = ethertype;
-	return Tx_Buff + sizeof(ETH_FrameHeader);
+	return txBuffer + sizeof(ETH_FrameHeader);
 }
 
 static inline HAL_StatusTypeDef __SendETHFrame(uint8_t *buffer, uint16_t length) {

@@ -63,8 +63,8 @@ ETH_TxPacketConfig TxConfig;
 ETH_HandleTypeDef heth;
 
 /* USER CODE BEGIN PV */
-uint8_t Rx_Buff[RX_BUF_CNT][RX_BUF_SIZE] __attribute__((section(".RxBuffSection")));
-uint8_t Tx_Buff[TX_BUF_SIZE] __attribute__((section(".TxBuffSection")));
+uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE] __attribute__((section(".RxBuffSection")));
+uint8_t txPool[TX_BUF_CNT][TX_BUF_SIZE] __attribute__((section(".TxBuffSection")));
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -283,7 +283,7 @@ void HAL_ETH_RxAllocateCallback(uint8_t **buff)
 {
     static uint32_t idx = 0;
 
-    *buff = Rx_Buff[idx];
+    *buff = rxPool[idx];
     idx = (idx + 1) % RX_BUF_CNT;
 }
 

@@ -28,7 +28,7 @@ typedef struct __attribute__((packed)) {
 	// Contains the fields listed below
 	// (3 bits)		Flags (R: Reserved | DF: Don't Fragment | MF: More Fragments)
 	// (13 bits)	Fragment Offset
-	uint16_t offset;
+	uint16_t frag;
 
 	uint8_t ttl;					// Time to live
 	uint8_t protocol;
