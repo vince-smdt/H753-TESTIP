@@ -13,11 +13,12 @@
 #define MAKE_IPV4_ADDR(b1, b2, b3, b4) ((uint32_t)(b4) | ((uint32_t)(b3) << 8) | ((uint32_t)(b2) << 16) | ((uint32_t)(b1) << 24))
 
 /* Private defines -----------------------------------------------------------*/
-#define ETHERTYPE_IPV4  	0x0800
-#define ETHERTYPE_ARP   	0x0806
-#define IPV4_PROTOCOL_ICMP	1
-#define ICMP_TYPE_ECHO		8
-#define ICMP_CODE_ECHO		0
+#define ETHERTYPE_IPV4  		0x0800
+#define ETHERTYPE_ARP   		0x0806
+#define IPV4_PROTOCOL_ICMP		1
+#define ICMP_TYPE_ECHO_REPLY	0
+#define ICMP_TYPE_ECHO			8
+#define ICMP_CODE_ECHO			0
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t ipaddr = MAKE_IPV4_ADDR(192, 168, 0, 100);
@@ -30,9 +31,9 @@ extern ETH_HandleTypeDef heth;
 extern uint8_t txPool[TX_BUF_CNT][TX_BUF_SIZE];
 
 /* Private function prototypes -----------------------------------------------*/
-static void __ProcessIPV4Packet(uint8_t *packet);
-static void __ProcessICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket);
-static void __ProcessICMPEchoPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket);
+static void __ProcessIPV4Packet(uint8_t *frame, uint8_t *packet);
+static void __ProcessICMPPacket(uint8_t *frame, uint8_t *ipv4Packet, uint8_t *icmpPacket, uint16_t icmpPacketLength);
+static void __ProcessICMPEchoPacket(uint8_t *rxFramePtr, uint8_t *ipv4Packet, uint8_t *icmpPacket, uint16_t icmpPacketLength);
 static void __ProcessUnhandledICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket);
 static void __ProcessUnhandledIPV4Packet(uint8_t *packet);
 static void __ProcessARPPacket(uint8_t *packet);
@@ -53,7 +54,7 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 
 	switch (ethertype) {
 	case ETHERTYPE_IPV4:
-		__ProcessIPV4Packet(payload);
+		__ProcessIPV4Packet(frame, payload);
 		break;
 
 	case ETHERTYPE_ARP:
@@ -66,7 +67,7 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 	}
 }
 
-static inline void __ProcessIPV4Packet(uint8_t *packet) {
+static inline void __ProcessIPV4Packet(uint8_t *frame, uint8_t *packet) {
 	IPV4_Packet *rxPacket = (IPV4_Packet*) packet;
 	uint32_t dest = ntohl(rxPacket->dest);
 
@@ -79,10 +80,11 @@ static inline void __ProcessIPV4Packet(uint8_t *packet) {
 	}
 
 	uint8_t* payload = packet + sizeof(IPV4_Packet);
+	uint16_t payloadLength = ntohs(rxPacket->len) - sizeof(IPV4_Packet);
 
 	switch (rxPacket->protocol) {
 	case IPV4_PROTOCOL_ICMP:
-		__ProcessICMPPacket(packet, payload);
+		__ProcessICMPPacket(frame, packet, payload, payloadLength);
 		break;
 
 	default:
@@ -91,12 +93,12 @@ static inline void __ProcessIPV4Packet(uint8_t *packet) {
 	}
 }
 
-static inline void __ProcessICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket) {
+static inline void __ProcessICMPPacket(uint8_t *frame, uint8_t *ipv4Packet, uint8_t *icmpPacket, uint16_t icmpPacketLength) {
 	ICMP_Packet *rxIcmpPacket = (ICMP_Packet*) icmpPacket;
 
 	switch (rxIcmpPacket->type) {
 	case ICMP_TYPE_ECHO:
-		__ProcessICMPEchoPacket(ipv4Packet, icmpPacket);
+		__ProcessICMPEchoPacket(frame, ipv4Packet, icmpPacket, icmpPacketLength);
 		break;
 
 	default:
@@ -105,17 +107,29 @@ static inline void __ProcessICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket)
 	}
 }
 
-static inline void __ProcessICMPEchoPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket) {
-	ICMP_Echo_Packet *rxIcmpEchoPacket = (ICMP_Echo_Packet*) icmpPacket;
+static inline void __ProcessICMPEchoPacket(uint8_t *rxFramePtr, uint8_t *ipv4Packet, uint8_t *icmpPacket, uint16_t icmpPacketLength) {
+	ICMP_Echo_Packet *rxIcmpEcho = (ICMP_Echo_Packet*) icmpPacket;
 
-	if (rxIcmpEchoPacket->code != 0) {
+	if (rxIcmpEcho->code != 0) {
 		return; // Invalid code for echo message
 	}
 
-	// uint8_t* txBuffer = __GetNextTxBuffer();
-	// IPV4_Packet *txIpv4Packet = (IPV4_Packet*) __PrepareETHFrame(txBuffer, rxPacket->sha, htons(ETHERTYPE_ARP));
-	// ICMP_Echo_Packet txIcmpEchoPacket = (ICMP_Echo_Packet*) __PrepareIPV4Packet((uint8_t*) txIpv4Packet, IPV4_PROTOCOL_ICMP, )
+	ETH_FrameHeader *rxFrame = (ETH_FrameHeader*) rxFramePtr;
+	IPV4_Packet *rxIpv4 = (IPV4_Packet*) ipv4Packet;
 
+	uint8_t* txBuffer = __GetNextTxBuffer();
+	uint8_t *txIpv4Ptr = __PrepareETHFrame(txBuffer, rxFrame->src, htons(ETHERTYPE_IPV4));
+	uint8_t *txIcmpPtr = __PrepareIPV4Packet(txIpv4Ptr, IPV4_PROTOCOL_ICMP, rxIpv4->src, icmpPacketLength);
+
+	memcpy(txIcmpPtr, icmpPacket, icmpPacketLength);
+
+	ICMP_Echo_Packet *txIcmpEcho = (ICMP_Echo_Packet*) txIcmpPtr;
+	txIcmpEcho->type = ICMP_TYPE_ECHO_REPLY;
+	txIcmpEcho->checksum = 0;
+
+	uint16_t txFrameLength = sizeof(ETH_FrameHeader) + sizeof(IPV4_Packet) + icmpPacketLength;
+
+	__SendETHFrame((uint8_t*) txBuffer, txFrameLength);
 }
 
 static inline void __ProcessUnhandledICMPPacket(uint8_t *ipv4Packet, uint8_t *icmpPacket) {
