@@ -6,10 +6,15 @@
 #include "stm32h7xx_hal_eth.h"
 
 typedef struct __attribute__((packed)) {
+	uint8_t mac[6];
+	uint32_t ip;
+} NetAddr;
+
+typedef struct __attribute__((packed)) {
 	uint8_t dst[6];		// MAC destination
 	uint8_t src[6];		// MAC source
 	uint16_t ethertype;
-} ETH_FrameHeader;
+} ETH_Header;
 
 typedef struct __attribute__((packed)) {
 	// BEGIN FIELD ORDER REVERSAL (LITTLE ENDIAN BITFIELD PACKING)
@@ -37,13 +42,13 @@ typedef struct __attribute__((packed)) {
 	uint32_t dest;					// Destination Address
 
 	// Options field not included as its length is variable (0-320 bits)
-} IPV4_Packet;
+} IPV4_Header;
 
 typedef struct __attribute__((packed)) {
 	uint8_t type;
 	uint8_t code;
 	uint16_t checksum;
-} ICMP_Packet;
+} ICMP_Header;
 
 typedef struct __attribute__((packed)) {
 	uint8_t type;
@@ -51,7 +56,14 @@ typedef struct __attribute__((packed)) {
 	uint16_t checksum;
 	uint16_t id;		// Identifier
 	uint16_t seq;		// Sequence Number
-} ICMP_Echo_Packet;
+} ICMP_Echo_Header;
+
+typedef struct __attribute__((packed)) {
+	uint16_t srcPort;
+	uint16_t destPort;
+	uint16_t len;
+	uint16_t checksum;
+} UDP_Header;
 
 typedef struct __attribute__((packed)) {
 	uint16_t htype;		// Hardware type
@@ -63,8 +75,10 @@ typedef struct __attribute__((packed)) {
 	uint32_t spa;		// Sender Protocol Address
 	uint8_t tha[6];		// Target Hardware Address
 	uint32_t tpa;		// Target Protocol Address
-} ARP_Packet;
+} ARP_Header;
 
 void MSIP_ProcessETHFrame(uint8_t *frame);
+HAL_StatusTypeDef MSIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len);
+void MSIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len);
 
 #endif // __MSIP_H
