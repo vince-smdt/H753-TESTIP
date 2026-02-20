@@ -21,7 +21,8 @@
 #define ICMP_CODE_ECHO			0
 
 /* Private variables ---------------------------------------------------------*/
-static uint32_t ipaddr = MAKE_IPV4_ADDR(192, 168, 0, 100);
+static uint32_t myIP = MAKE_IPV4_ADDR(192, 168, 0, 100);
+static uint16_t myPort = 1;
 static ETH_BufferTypeDef Txbuffer;
 static uint8_t TxPoolBufferIdx = 0;
 
@@ -41,7 +42,7 @@ static uint8_t* __PrepareETHFrame(uint8_t* buffer, uint8_t dst[6], uint16_t ethe
 static uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buffer, uint8_t protocol, uint32_t dest, uint16_t dataLength);
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buffer, uint16_t length);
 
-/* Private function definitions ----------------------------------------------*/
+/* Public function definitions -----------------------------------------------*/
 void MSIP_ProcessETHFrame(uint8_t *frame) {
 	ETH_Header *header = (ETH_Header*) frame;
 	uint16_t ethertype = ntohs(header->ethertype);
@@ -69,20 +70,31 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 
 HAL_StatusTypeDef MSIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
 	uint8_t *txBuffer = __GetNextTxBuffer();
-	uint8_t *txIpv4 = __PrepareETHFrame(txBuffer, netAddr->mac, ETHERTYPE_IPV4);
-	uint8_t *txUdp = __PrepareIPV4Packet(txIpv4, IPV4_PROTOCOL_UDP, netAddr->ip, len);
+	uint8_t *txIpv4 = __PrepareETHFrame(txBuffer, netAddr->mac, htons(ETHERTYPE_IPV4));
+	uint8_t *txUdp = __PrepareIPV4Packet(txIpv4, IPV4_PROTOCOL_UDP, netAddr->ip, sizeof(UDP_Header) + len);
 	uint8_t *txUdpData = txUdp + sizeof(UDP_Header);
 	uint16_t ethLen = sizeof(ETH_Header) + sizeof(IPV4_Header) + sizeof(UDP_Header) + len;
 
+	UDP_Header *udphdr = (UDP_Header*) txUdp;
+	udphdr->len = htons(sizeof(UDP_Header) + len);
+	udphdr->srcPort = htons(myPort);
+	udphdr->destPort = netAddr->port;
+
 	memcpy(txUdpData, payload, len);
-	return __SendETHFrame(payload, ethLen);
+	return __SendETHFrame(txBuffer, ethLen);
 }
 
+void MSIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
+	uint8_t message[6] = "smart ";
+	MSIP_SendUDPPacket(netAddr, message, 6);
+}
+
+/* Private function definitions ----------------------------------------------*/
 static inline void __ProcessIPV4Packet(NetAddr *netAddr, uint8_t *rxIpv4Ptr) {
 	IPV4_Header *rxPacket = (IPV4_Header*) rxIpv4Ptr;
 	uint32_t dest = ntohl(rxPacket->dest);
 
-	if (dest != ipaddr) {
+	if (dest != myIP) {
 		return; // Not addressed to this host
 	}
 
@@ -146,16 +158,20 @@ static inline void __ProcessICMPEchoPacket(NetAddr *netAddr, uint8_t *rxIcmpPtr,
 
 static inline void __ProcessUDPPacket(NetAddr *netAddr, uint8_t *rxUdpPtr) {
 	UDP_Header *rxUdp = (UDP_Header*) rxUdpPtr;
-	uint16_t dataLength = ntohs(rxUdp->len);
-	// TODO: Call user function with pointer to data and data length
+	uint8_t* payload = rxUdpPtr + sizeof(UDP_Header);
+	uint16_t len = ntohs(rxUdp->len);
+
+	netAddr->port = rxUdp->srcPort;
+
+	MSIP_UDP_RxCpltCallback(netAddr, payload, len);
 }
 
 static inline void __ProcessARPPacket(uint8_t *rxArpPtr) {
-	ARP_Header *rxPacket = (ARP_Header*) rxArpPtr;
+	ARP_Packet *rxPacket = (ARP_Packet*) rxArpPtr;
 	uint32_t tpa = ntohl(rxPacket->tpa);
 	uint16_t oper = ntohs(rxPacket->oper);
 
-	if (tpa != ipaddr) {
+	if (tpa != myIP) {
 		return; // Not addressed to this host
 	}
 
@@ -165,18 +181,18 @@ static inline void __ProcessARPPacket(uint8_t *rxArpPtr) {
 
 	// Send ARP reply
 	uint8_t* txBuffer = __GetNextTxBuffer();
-	ARP_Header *txPacket = (ARP_Header*) __PrepareETHFrame(txBuffer, rxPacket->sha, htons(ETHERTYPE_ARP));
+	ARP_Packet *txPacket = (ARP_Packet*) __PrepareETHFrame(txBuffer, rxPacket->sha, htons(ETHERTYPE_ARP));
 	txPacket->htype = htons(1);
 	txPacket->ptype = htons(0x0800);
 	txPacket->hlen  = 6;
 	txPacket->plen  = 4;
 	txPacket->oper  = htons(2);
 	memcpy(txPacket->sha, heth.Init.MACAddr, 6);
-	txPacket->spa = htonl(ipaddr);
+	txPacket->spa = htonl(myIP);
 	memcpy(txPacket->tha, rxPacket->sha, 6);
 	txPacket->tpa = rxPacket->spa;
 
-	__SendETHFrame(txBuffer, sizeof(ETH_Header) + sizeof(ARP_Header));
+	__SendETHFrame(txBuffer, sizeof(ETH_Header) + sizeof(ARP_Packet));
 }
 
 static inline uint8_t* __GetNextTxBuffer() {
@@ -205,7 +221,7 @@ static inline uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buffer, uint8_t protocol
 	packet->ttl = 64;
 	packet->protocol = protocol;
 	packet->checksum = 0;
-	packet->src = htonl(ipaddr);
+	packet->src = htonl(myIP);
 	packet->dest = dest;
 	return ipv4Buffer + sizeof(IPV4_Header);
 }

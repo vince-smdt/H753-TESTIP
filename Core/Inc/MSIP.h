@@ -8,6 +8,7 @@
 typedef struct __attribute__((packed)) {
 	uint8_t mac[6];
 	uint32_t ip;
+	uint16_t port;
 } NetAddr;
 
 typedef struct __attribute__((packed)) {
@@ -75,7 +76,7 @@ typedef struct __attribute__((packed)) {
 	uint32_t spa;		// Sender Protocol Address
 	uint8_t tha[6];		// Target Hardware Address
 	uint32_t tpa;		// Target Protocol Address
-} ARP_Header;
+} ARP_Packet;
 
 void MSIP_ProcessETHFrame(uint8_t *frame);
 HAL_StatusTypeDef MSIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len);
