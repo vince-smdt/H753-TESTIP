@@ -1,5 +1,5 @@
 /* Includes ------------------------------------------------------------------*/
-#include "msip.h"
+#include <testip.h>
 #include "string.h"
 #include "stm32h7xx_hal_def.h"
 #include "main.h"
@@ -45,7 +45,7 @@ static uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t 
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buf, uint16_t len);
 
 /* Public function definitions -----------------------------------------------*/
-void MSIP_ProcessETHFrame(uint8_t *frame) {
+void TESTIP_ProcessETHFrame(uint8_t *frame) {
 	ETH_Header *hdr = (ETH_Header*) frame;
 	uint16_t ethertype = ntohs(hdr->ethertype);
 	uint8_t *payload = frame + sizeof(ETH_Header);
@@ -67,7 +67,7 @@ void MSIP_ProcessETHFrame(uint8_t *frame) {
 	}
 }
 
-HAL_StatusTypeDef MSIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
+HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
 	uint16_t txUdpLen = sizeof(UDP_Header) + len;
 	uint8_t *txBuf = __GetNextTxBuffer();
 	uint8_t *txIpv4Buf = __PrepareETHFrame(txBuf, netAddr->mac, ETHERTYPE_IPV4);
@@ -85,11 +85,11 @@ HAL_StatusTypeDef MSIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_
 }
 
 /* Callbacks -----------------------------------------------------------------*/
-__weak void MSIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
+__weak void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
 	/* Prevent unused argument(s) compilation warning */
 	UNUSED(heth);
 	/* NOTE : This function Should not be modified, when the callback is needed,
-	the MSIP_UDP_RxCpltCallback could be implemented in the user file
+	the TESTIP_UDP_RxCpltCallback could be implemented in the user file
 	*/
 }
 
@@ -199,7 +199,7 @@ static inline void __ProcessUDPPacket(NetAddr *netAddr, uint8_t *udpBuf) {
 
 	netAddr->port = rxUdp->srcPort;
 
-	MSIP_UDP_RxCpltCallback(netAddr, data, len);
+	TESTIP_UDP_RxCpltCallback(netAddr, data, len);
 }
 
 static inline void __ProcessARPPacket(uint8_t *arpBuf) {

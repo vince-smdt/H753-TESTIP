@@ -1,6 +1,6 @@
 /* Includes ------------------------------------------------------------------*/
+#include <testip.h>
 #include "main.h"
-#include "msip.h"
 
 /* External variables --------------------------------------------------------*/
 extern uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE];
@@ -26,6 +26,6 @@ void HAL_ETH_RxCpltCallback(ETH_HandleTypeDef *heth)
 	if (HAL_ETH_ReadData(heth, &rx_start) == HAL_OK)
 	{
 	    uint8_t *frame = (uint8_t *)rx_start;
-	    MSIP_ProcessETHFrame(frame);
+	    TESTIP_ProcessETHFrame(frame);
 	}
 }

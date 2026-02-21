@@ -17,9 +17,10 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include "testip.h"
 #include "main.h"
-#include "msip.h"
 #include "string.h"
+#include "stdio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -279,9 +280,16 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void MSIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
-	uint8_t message[6] = "smart ";
-	MSIP_SendUDPPacket(netAddr, message, 6);
+void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
+	char buf[128];
+	int strLen = snprintf(buf, sizeof(buf), "Message received: %.*s\n", len, (char*)payload);
+
+	if (strLen == 0) {
+		return; // Problems have occurred...
+	}
+
+	uint16_t rxLen = (strLen >= sizeof(buf)) ? (sizeof(buf) - 1) : (uint16_t)strLen;
+	TESTIP_SendUDPPacket(netAddr, (uint8_t*)buf, rxLen);
 }
 /* USER CODE END 4 */
 

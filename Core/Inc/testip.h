@@ -1,5 +1,5 @@
-#ifndef __MSIP_H
-#define __MSIP_H
+#ifndef __TESTIP_H
+#define __TESTIP_H
 
 /* Includes ------------------------------------------------------------------*/
 #include "stdint.h"
@@ -84,10 +84,10 @@ typedef struct __attribute__((packed)) {
 } ARP_Packet;
 
 /* Public function prototypes  -----------------------------------------------*/
-void MSIP_ProcessETHFrame(uint8_t *frame);
-HAL_StatusTypeDef MSIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len);
+void TESTIP_ProcessETHFrame(uint8_t *frame);
+HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len);
 
 /* Callbacks -----------------------------------------------------------------*/
-void MSIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len);
+void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len);
 
-#endif // __MSIP_H
+#endif // __TESTIP_H
