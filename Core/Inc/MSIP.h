@@ -1,10 +1,12 @@
 #ifndef __MSIP_H
 #define __MSIP_H
 
+/* Includes ------------------------------------------------------------------*/
 #include "stdint.h"
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_eth.h"
 
+/* Structs -------------------------------------------------------------------*/
 typedef struct __attribute__((packed)) {
 	uint8_t mac[6];
 	uint32_t ip;
@@ -78,8 +80,11 @@ typedef struct __attribute__((packed)) {
 	uint32_t tpa;		// Target Protocol Address
 } ARP_Packet;
 
+/* Public function prototypes  -----------------------------------------------*/
 void MSIP_ProcessETHFrame(uint8_t *frame);
 HAL_StatusTypeDef MSIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len);
+
+/* Callbacks -----------------------------------------------------------------*/
 void MSIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len);
 
 #endif // __MSIP_H

@@ -279,7 +279,10 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void MSIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
+	uint8_t message[6] = "smart ";
+	MSIP_SendUDPPacket(netAddr, message, 6);
+}
 /* USER CODE END 4 */
 
  /* MPU Configuration */
