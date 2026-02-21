@@ -36,13 +36,16 @@ typedef struct __attribute__((packed)) {
 	// Contains the fields listed below
 	// (3 bits)		Flags (R: Reserved | DF: Don't Fragment | MF: More Fragments)
 	// (13 bits)	Fragment Offset
+	#define IPV4_DF_FLAG 		0x4000
+	#define IPV4_MF_FLAG 		0x2000
+	#define IPV4_OFFSET_MASK 	0x1FFF
 	uint16_t frag;
 
 	uint8_t ttl;					// Time to live
 	uint8_t protocol;
 	uint16_t checksum;				// Header Checksum
 	uint32_t src;					// Source Address
-	uint32_t dest;					// Destination Address
+	uint32_t dst;					// Destination Address
 
 	// Options field not included as its length is variable (0-320 bits)
 } IPV4_Header;
@@ -63,7 +66,7 @@ typedef struct __attribute__((packed)) {
 
 typedef struct __attribute__((packed)) {
 	uint16_t srcPort;
-	uint16_t destPort;
+	uint16_t dstPort;
 	uint16_t len;
 	uint16_t checksum;
 } UDP_Header;

@@ -12,6 +12,8 @@
 #define MAKE_IPV4_ADDR(b1, b2, b3, b4) ((uint32_t)(b4) | ((uint32_t)(b3) << 8) | ((uint32_t)(b2) << 16) | ((uint32_t)(b1) << 24))
 
 /* Private defines -----------------------------------------------------------*/
+#define ETH_MAX_PAYLOAD_LEN		1500
+#define IPV4_MAX_DATA_LEN		1440
 #define ETHERTYPE_IPV4  		0x0800
 #define ETHERTYPE_ARP   		0x0806
 #define IPV4_PROTOCOL_ICMP		1
@@ -76,7 +78,7 @@ HAL_StatusTypeDef MSIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_
 	UDP_Header *txUdp = (UDP_Header*) txUdpBuf;
 	txUdp->len = htons(txUdpLen);
 	txUdp->srcPort = htons(myPort);
-	txUdp->destPort = netAddr->port;
+	txUdp->dstPort = netAddr->port;
 
 	memcpy(txUdpData, payload, len);
 	return __SendETHFrame(txBuf, txBufLen);
@@ -94,14 +96,31 @@ __weak void MSIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t
 /* Private function definitions ----------------------------------------------*/
 static inline void __ProcessIPV4Packet(NetAddr *netAddr, uint8_t *ipv4Buf) {
 	IPV4_Header *rxIpv4 = (IPV4_Header*) ipv4Buf;
-	uint32_t destIp = ntohl(rxIpv4->dest);
-
-	if (destIp != myIP) {
-		return; // Not addressed to this host
-	}
 
 	if (rxIpv4->ihl > 5) {
 		return; // Options currently not supported
+	}
+
+	uint32_t dstIp = ntohl(rxIpv4->dst);
+
+	if (dstIp != myIP) {
+		return; // Not addressed to this host
+	}
+
+	uint16_t len = ntohs(rxIpv4->len);
+
+	if (len < sizeof(IPV4_Header)) {
+		return; // Packet length is less than the size of the IPv4 header
+	}
+
+	if (len > ETH_MAX_PAYLOAD_LEN) {
+		return; // Packet length exceeds max ethernet frame payload size
+	}
+
+	uint16_t frag = ntohs(rxIpv4->frag);
+
+	if ((frag & IPV4_MF_FLAG) || (frag & IPV4_OFFSET_MASK)) {
+		return; // Fragmentation not supported
 	}
 
 	netAddr->ip = rxIpv4->src;
@@ -160,8 +179,23 @@ static inline void __ProcessICMPEchoPacket(NetAddr *netAddr, uint8_t *icmpBuf, u
 
 static inline void __ProcessUDPPacket(NetAddr *netAddr, uint8_t *udpBuf) {
 	UDP_Header *rxUdp = (UDP_Header*) udpBuf;
-	uint8_t* data = udpBuf + sizeof(UDP_Header);
 	uint16_t len = ntohs(rxUdp->len);
+
+	if (len < sizeof(UDP_Header)) {
+		return; // Packet length is less than the size of the UDP header
+	}
+
+	if (len > IPV4_MAX_DATA_LEN) {
+		return; // Packet length exceeds max IPv4 packet data size
+	}
+
+	uint16_t dstPort = ntohs(rxUdp->dstPort);
+
+	if (dstPort != myPort) {
+		return; // No application listening on this port
+	}
+
+	uint8_t* data = udpBuf + sizeof(UDP_Header);
 
 	netAddr->port = rxUdp->srcPort;
 
@@ -219,12 +253,12 @@ static inline uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, u
 	txIpv4->ecn = 0;
 	txIpv4->len = htons(sizeof(IPV4_Header) + dataLen);
 	txIpv4->id = 0;
-	txIpv4->frag = 0;
+	txIpv4->frag = htons(IPV4_DF_FLAG);
 	txIpv4->ttl = 64;
 	txIpv4->protocol = protocol;
 	txIpv4->checksum = 0;
 	txIpv4->src = htonl(myIP);
-	txIpv4->dest = dstIp;
+	txIpv4->dst = dstIp;
 	return ipv4Buf + sizeof(IPV4_Header);
 }
 
