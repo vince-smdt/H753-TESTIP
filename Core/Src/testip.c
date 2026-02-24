@@ -9,7 +9,6 @@
 #define ntohs(x) __builtin_bswap16(x) 	// Converts unsigned short integer from network byte order (big endian) to host byte order (little endian)
 #define htonl(x) __builtin_bswap32(x)	// Converts unsigned long integer from host byte order (little endian) to network byte order (big endian)
 #define ntohl(x) __builtin_bswap32(x)	// Converts unsigned long integer from network byte order (big endian) to host byte order (little endian)
-#define MAKE_IPV4_ADDR(b1, b2, b3, b4) ((uint32_t)(b4) | ((uint32_t)(b3) << 8) | ((uint32_t)(b2) << 16) | ((uint32_t)(b1) << 24))
 
 /* Private defines -----------------------------------------------------------*/
 #define ETH_MAX_PAYLOAD_LEN		1500
@@ -24,7 +23,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t myIP = MAKE_IPV4_ADDR(192, 168, 0, 100);
-static uint16_t myPort = 1;
+static uint16_t myPort = 55555;
 static ETH_BufferTypeDef Txbuffer;
 static uint8_t TxPoolBufferIdx = 0;
 
@@ -78,7 +77,7 @@ HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint1
 	UDP_Header *txUdp = (UDP_Header*) txUdpBuf;
 	txUdp->len = htons(txUdpLen);
 	txUdp->srcPort = htons(myPort);
-	txUdp->dstPort = netAddr->port;
+	txUdp->dstPort = htons(netAddr->port);
 
 	memcpy(txUdpData, payload, len);
 	return __SendETHFrame(txBuf, txBufLen);
@@ -123,7 +122,7 @@ static inline void __ProcessIPV4Packet(NetAddr *netAddr, uint8_t *ipv4Buf) {
 		return; // Fragmentation not supported
 	}
 
-	netAddr->ip = rxIpv4->src;
+	netAddr->ip = ntohl(rxIpv4->src);
 
 	uint8_t* rxDataBuf = ipv4Buf + sizeof(IPV4_Header);
 	uint16_t rxDataLen = ntohs(rxIpv4->len) - sizeof(IPV4_Header);
@@ -258,7 +257,7 @@ static inline uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, u
 	txIpv4->protocol = protocol;
 	txIpv4->checksum = 0;
 	txIpv4->src = htonl(myIP);
-	txIpv4->dst = dstIp;
+	txIpv4->dst = htonl(dstIp);
 	return ipv4Buf + sizeof(IPV4_Header);
 }
 

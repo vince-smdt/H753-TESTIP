@@ -4,6 +4,7 @@
 
 /* External variables --------------------------------------------------------*/
 extern uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE];
+extern uint32_t counterRx;
 
 /* Overridden function definitions -------------------------------------------*/
 void HAL_ETH_RxAllocateCallback(uint8_t **buff)
@@ -22,6 +23,7 @@ void HAL_ETH_RxLinkCallback(void **pStart, void **pEnd, uint8_t *buff, uint16_t 
 
 void HAL_ETH_RxCpltCallback(ETH_HandleTypeDef *heth)
 {
+	counterRx++;
 	void *rx_start;
 	if (HAL_ETH_ReadData(heth, &rx_start) == HAL_OK)
 	{

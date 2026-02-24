@@ -6,6 +6,9 @@
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_eth.h"
 
+/* Public macros -------------------------------------------------------------*/
+#define MAKE_IPV4_ADDR(b1, b2, b3, b4) ((uint32_t)(b4) | ((uint32_t)(b3) << 8) | ((uint32_t)(b2) << 16) | ((uint32_t)(b1) << 24))
+
 /* Structs -------------------------------------------------------------------*/
 typedef struct __attribute__((packed)) {
 	uint8_t mac[6];
