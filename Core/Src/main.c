@@ -127,6 +127,9 @@ int main(void)
   MX_ETH_Init();
   /* USER CODE BEGIN 2 */
   HAL_ETH_Start_IT(&heth);
+
+  /*
+
   NetAddr netAddr;
   netAddr.mac[0] = 0x00;
   netAddr.mac[1] = 0xE0;
@@ -138,6 +141,8 @@ int main(void)
   netAddr.port = 7520;
   char buf[128] = "hello\n";
 
+  */
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -147,9 +152,14 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	/*
+
 	int len = snprintf(buf, sizeof(buf), "%lu - %lu\n", counterTx, counterRx);
 	TESTIP_SendUDPPacket(&netAddr, (uint8_t*)buf, len);
 	counterTx++;
+
+	*/
   }
   /* USER CODE END 3 */
 }
@@ -296,7 +306,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
-/*	char buf[128];
+	char buf[128];
 	int strLen = snprintf(buf, sizeof(buf), "Message received: %.*s\n", len, (char*)payload);
 
 	if (strLen == 0) {
@@ -304,7 +314,7 @@ void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len)
 	}
 
 	uint16_t rxLen = (strLen >= sizeof(buf)) ? (sizeof(buf) - 1) : (uint16_t)strLen;
-	TESTIP_SendUDPPacket(netAddr, (uint8_t*)buf, rxLen);*/
+	TESTIP_SendUDPPacket(netAddr, (uint8_t*)buf, rxLen);
 }
 /* USER CODE END 4 */
 

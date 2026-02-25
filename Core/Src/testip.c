@@ -12,14 +12,23 @@
 
 /* Private defines -----------------------------------------------------------*/
 #define ETH_MAX_PAYLOAD_LEN		1500
-#define IPV4_MAX_DATA_LEN		1440
 #define ETHERTYPE_IPV4  		0x0800
 #define ETHERTYPE_ARP   		0x0806
+
+#define IPV4_MAX_DATA_LEN		1440
 #define IPV4_PROTOCOL_ICMP		1
 #define IPV4_PROTOCOL_UDP		17
+
 #define ICMP_TYPE_ECHO_REPLY	0
 #define ICMP_TYPE_ECHO			8
 #define ICMP_CODE_ECHO			0
+
+#define ARP_HTYPE_ETHERNET		1
+#define ARP_PTYPE_IPV4			0x0800
+#define ARP_HLEN_ETHERNET		6
+#define ARP_PLEN_IPV4			4
+#define ARP_OPER_REQUEST		1
+#define ARP_OPER_REPLY			2
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t myIP = MAKE_IPV4_ADDR(192, 168, 0, 100);
@@ -38,6 +47,7 @@ static void __ProcessICMPPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint16_t icm
 static void __ProcessICMPEchoPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint16_t icmpLen);
 static void __ProcessUDPPacket(NetAddr *netAddr, uint8_t *udpBuf);
 static void __ProcessARPPacket(uint8_t *arpBuf);
+static void __SendARPPacket(uint8_t mac[6], uint32_t ip, uint16_t oper);
 static uint8_t* __GetNextTxBuffer();
 static uint8_t* __PrepareETHFrame(uint8_t* buf, uint8_t dstMac[6], uint16_t ethertype);
 static uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t protocol, uint32_t dstIp);
@@ -196,7 +206,7 @@ static inline void __ProcessUDPPacket(NetAddr *netAddr, uint8_t *udpBuf) {
 
 	uint8_t* data = udpBuf + sizeof(UDP_Header);
 
-	netAddr->port = rxUdp->srcPort;
+	netAddr->port = ntohs(rxUdp->srcPort);
 
 	TESTIP_UDP_RxCpltCallback(netAddr, data, len);
 }
@@ -210,22 +220,26 @@ static inline void __ProcessARPPacket(uint8_t *arpBuf) {
 		return; // Not addressed to this host
 	}
 
-	if (oper != 1) {
+	if (oper != ARP_OPER_REQUEST) {
 		return; // Only process ARP requests
 	}
 
-	// Send ARP reply
+	__SendARPPacket(rxArp->sha, rxArp->spa, ARP_OPER_REPLY);
+}
+
+static inline void __SendARPPacket(uint8_t mac[6], uint32_t ip, uint16_t oper) {
 	uint8_t* txBuf = __GetNextTxBuffer();
-	ARP_Packet *txArp = (ARP_Packet*) __PrepareETHFrame(txBuf, rxArp->sha, ETHERTYPE_ARP);
-	txArp->htype = htons(1);
-	txArp->ptype = htons(0x0800);
-	txArp->hlen  = 6;
-	txArp->plen  = 4;
-	txArp->oper  = htons(2);
+	ARP_Packet *txArp = (ARP_Packet*) __PrepareETHFrame(txBuf, mac, ETHERTYPE_ARP);
+
+	txArp->htype = htons(ARP_HTYPE_ETHERNET);
+	txArp->ptype = htons(ARP_PTYPE_IPV4);
+	txArp->hlen  = ARP_HLEN_ETHERNET;
+	txArp->plen  = ARP_PLEN_IPV4;
+	txArp->oper  = htons(oper);
 	memcpy(txArp->sha, heth.Init.MACAddr, 6);
 	txArp->spa = htonl(myIP);
-	memcpy(txArp->tha, rxArp->sha, 6);
-	txArp->tpa = rxArp->spa;
+	memcpy(txArp->tha, mac, 6);
+	txArp->tpa = htonl(ip);
 
 	__SendETHFrame(txBuf, sizeof(ETH_Header) + sizeof(ARP_Packet));
 }
