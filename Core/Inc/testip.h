@@ -86,11 +86,32 @@ typedef struct __attribute__((packed)) {
 	uint32_t tpa;		// Target Protocol Address
 } ARP_Packet;
 
+typedef enum {
+	PING_STATE_IDLE,
+	PING_STATE_PENDING
+} PingState;
+
+typedef enum {
+	PING_RES_SUCCESS,
+	PING_RES_TIMEOUT
+} PingStatus;
+
+typedef struct {
+	PingState state;
+	uint32_t targetIp;
+	uint16_t id;
+	uint16_t seq;
+	uint32_t sentTick;
+} PingControlBlock;
+
 /* Public function prototypes  -----------------------------------------------*/
+void TESTIP_Process();
 void TESTIP_ProcessETHFrame(uint8_t *frame);
 HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len);
+HAL_StatusTypeDef TESTIP_Ping(NetAddr *netAddr);
 
 /* Callbacks -----------------------------------------------------------------*/
 void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len);
+void TESTIP_PingCallback(uint32_t ip, PingStatus status, uint32_t rtt_ms);
 
 #endif // __TESTIP_H

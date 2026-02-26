@@ -22,6 +22,7 @@
 #define ICMP_TYPE_ECHO_REPLY	0
 #define ICMP_TYPE_ECHO			8
 #define ICMP_CODE_ECHO			0
+#define ICMP_ECHO_DATA_LEN		32
 
 #define ARP_HTYPE_ETHERNET		1
 #define ARP_PTYPE_IPV4			0x0800
@@ -30,11 +31,16 @@
 #define ARP_OPER_REQUEST		1
 #define ARP_OPER_REPLY			2
 
+#define PING_TIMEOUT_MS			3000
+
 /* Private variables ---------------------------------------------------------*/
 static uint32_t myIP = MAKE_IPV4_ADDR(192, 168, 0, 100);
 static uint16_t myPort = 55555;
 static ETH_BufferTypeDef Txbuffer;
 static uint8_t TxPoolBufferIdx = 0;
+static PingControlBlock activePing;
+static uint16_t icmpEchoSeq = 1000;
+static char icmpEchoData[ICMP_ECHO_DATA_LEN] = "abcdefghijklmnopqrstuvwxyz data";
 
 /* External variables --------------------------------------------------------*/
 extern ETH_TxPacketConfig TxConfig;
@@ -44,6 +50,7 @@ extern uint8_t txPool[TX_BUF_CNT][TX_BUF_SIZE];
 /* Private function prototypes -----------------------------------------------*/
 static void __ProcessIPV4Packet(NetAddr *netAddr, uint8_t *ipv4Buf);
 static void __ProcessICMPPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint16_t icmpLen);
+static void __ProcessICMPEchoReplyPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint16_t icmpLen);
 static void __ProcessICMPEchoPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint16_t icmpLen);
 static void __ProcessUDPPacket(NetAddr *netAddr, uint8_t *udpBuf);
 static void __ProcessARPPacket(uint8_t *arpBuf);
@@ -54,6 +61,13 @@ static uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t 
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buf, uint16_t len);
 
 /* Public function definitions -----------------------------------------------*/
+void TESTIP_Process() {
+	if (activePing.state == PING_STATE_PENDING && (HAL_GetTick() - activePing.sentTick) > PING_TIMEOUT_MS) {
+		activePing.state = PING_STATE_IDLE;
+		TESTIP_PingCallback(activePing.targetIp, PING_RES_TIMEOUT, PING_TIMEOUT_MS);
+	}
+}
+
 void TESTIP_ProcessETHFrame(uint8_t *frame) {
 	ETH_Header *hdr = (ETH_Header*) frame;
 	uint16_t ethertype = ntohs(hdr->ethertype);
@@ -78,27 +92,70 @@ void TESTIP_ProcessETHFrame(uint8_t *frame) {
 
 HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
 	uint16_t txUdpLen = sizeof(UDP_Header) + len;
+	uint16_t txBufLen = sizeof(ETH_Header) + sizeof(IPV4_Header) + txUdpLen;
 	uint8_t *txBuf = __GetNextTxBuffer();
 	uint8_t *txIpv4Buf = __PrepareETHFrame(txBuf, netAddr->mac, ETHERTYPE_IPV4);
 	uint8_t *txUdpBuf = __PrepareIPV4Packet(txIpv4Buf, txUdpLen, IPV4_PROTOCOL_UDP, netAddr->ip);
-	uint8_t *txUdpData = txUdpBuf + sizeof(UDP_Header);
-	uint16_t txBufLen = sizeof(ETH_Header) + sizeof(IPV4_Header) + txUdpLen;
+	uint8_t *txUdpDataBuf = txUdpBuf + sizeof(UDP_Header);
 
 	UDP_Header *txUdp = (UDP_Header*) txUdpBuf;
 	txUdp->len = htons(txUdpLen);
 	txUdp->srcPort = htons(myPort);
 	txUdp->dstPort = htons(netAddr->port);
+	memcpy(txUdpDataBuf, payload, len);
 
-	memcpy(txUdpData, payload, len);
+	return __SendETHFrame(txBuf, txBufLen);
+}
+
+HAL_StatusTypeDef TESTIP_Ping(NetAddr *netAddr) {
+	if (activePing.state == PING_STATE_PENDING) {
+		return HAL_BUSY;
+	}
+
+	icmpEchoSeq++;
+
+	uint16_t txIcmpLen = sizeof(ICMP_Echo_Header) + ICMP_ECHO_DATA_LEN;
+	uint16_t txBufLen = sizeof(ETH_Header) + sizeof(IPV4_Header) + sizeof(ICMP_Echo_Header) + ICMP_ECHO_DATA_LEN;
+	uint8_t *txBuf = __GetNextTxBuffer();
+	uint8_t *txIpv4Buf = __PrepareETHFrame(txBuf, netAddr->mac, ETHERTYPE_IPV4);
+	uint8_t *txIcmpBuf = __PrepareIPV4Packet(txIpv4Buf, txIcmpLen, IPV4_PROTOCOL_ICMP, netAddr->ip);
+	uint8_t *txIcmpDataBuf = txIcmpBuf + sizeof(ICMP_Echo_Header);
+
+	ICMP_Echo_Header *txIcmp = (ICMP_Echo_Header*) txIcmpBuf;
+	txIcmp->type = ICMP_TYPE_ECHO;
+	txIcmp->code = ICMP_CODE_ECHO;
+	txIcmp->checksum = 0;
+	txIcmp->id = 0;
+	txIcmp->seq = icmpEchoSeq;
+	memcpy(txIcmpDataBuf, icmpEchoData, ICMP_ECHO_DATA_LEN);
+
+	activePing.state = PING_STATE_PENDING;
+	activePing.targetIp = netAddr->ip;
+	activePing.id = 0;
+	activePing.seq = icmpEchoSeq;
+	activePing.sentTick = HAL_GetTick();
+
 	return __SendETHFrame(txBuf, txBufLen);
 }
 
 /* Callbacks -----------------------------------------------------------------*/
 __weak void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
 	/* Prevent unused argument(s) compilation warning */
-	UNUSED(heth);
+	UNUSED(netAddr);
+	UNUSED(payload);
+	UNUSED(len);
 	/* NOTE : This function Should not be modified, when the callback is needed,
 	the TESTIP_UDP_RxCpltCallback could be implemented in the user file
+	*/
+}
+
+__weak void TESTIP_PingCallback(uint32_t ip, PingStatus status, uint32_t rtt_ms) {
+	/* Prevent unused argument(s) compilation warning */
+	UNUSED(ip);
+	UNUSED(status);
+	UNUSED(rtt_ms);
+	/* NOTE : This function Should not be modified, when the callback is needed,
+	the TESTIP_PingCallback could be implemented in the user file
 	*/
 }
 
@@ -155,6 +212,10 @@ static inline void __ProcessICMPPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint1
 	ICMP_Header *rxIcmp = (ICMP_Header*) icmpBuf;
 
 	switch (rxIcmp->type) {
+	case ICMP_TYPE_ECHO_REPLY:
+		__ProcessICMPEchoReplyPacket(netAddr, icmpBuf, icmpLen);
+		break;
+
 	case ICMP_TYPE_ECHO:
 		__ProcessICMPEchoPacket(netAddr, icmpBuf, icmpLen);
 		break;
@@ -162,6 +223,36 @@ static inline void __ProcessICMPPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint1
 	default:
 		break;
 	}
+}
+
+static inline void __ProcessICMPEchoReplyPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint16_t icmpLen) {
+	if (activePing.state != PING_STATE_PENDING) {
+		return; // Not expecting echo reply
+	}
+	if (activePing.targetIp != netAddr->ip) {
+		return; // Not addressed to this host
+	}
+
+	uint32_t rtt_ms = HAL_GetTick() - activePing.sentTick;
+	if (rtt_ms > PING_TIMEOUT_MS) {
+		return; // Ping already timed out
+	}
+
+	ICMP_Echo_Header *rxIcmp = (ICMP_Echo_Header*) icmpBuf;
+	if (activePing.id != rxIcmp->id) {
+		return; // Wrong identifier
+	}
+	if (activePing.seq != rxIcmp->seq) {
+		return; // Wrong sequence number
+	}
+
+	uint8_t *icmpDataBuf = icmpBuf + sizeof(ICMP_Echo_Header);
+	if (memcmp(icmpEchoData, icmpDataBuf, ICMP_ECHO_DATA_LEN)) {
+		return; // Wrong data
+	}
+
+	activePing.state = PING_STATE_IDLE;
+	TESTIP_PingCallback(netAddr->ip, PING_RES_SUCCESS, rtt_ms);
 }
 
 static inline void __ProcessICMPEchoPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint16_t icmpLen) {
