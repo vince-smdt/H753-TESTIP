@@ -105,6 +105,7 @@ typedef struct {
 } PingControlBlock;
 
 /* Public function prototypes  -----------------------------------------------*/
+void TESTIP_Init();
 void TESTIP_Process();
 void TESTIP_ProcessETHFrame(uint8_t *frame);
 HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len);

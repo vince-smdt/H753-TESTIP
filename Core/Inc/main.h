@@ -64,9 +64,9 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 #define RX_BUF_SIZE 1536
-#define RX_BUF_CNT  12
+#define RX_BUF_CNT  40
 #define TX_BUF_SIZE 1536
-#define TX_BUF_CNT	4
+#define TX_BUF_CNT	40
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

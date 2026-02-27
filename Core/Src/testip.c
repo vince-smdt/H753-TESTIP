@@ -61,6 +61,11 @@ static uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t 
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buf, uint16_t len);
 
 /* Public function definitions -----------------------------------------------*/
+void TESTIP_Init() {
+	HAL_ETH_Start_IT(&heth);
+	activePing.state = PING_STATE_IDLE;
+}
+
 void TESTIP_Process() {
 	if (activePing.state == PING_STATE_PENDING && (HAL_GetTick() - activePing.sentTick) > PING_TIMEOUT_MS) {
 		activePing.state = PING_STATE_IDLE;
