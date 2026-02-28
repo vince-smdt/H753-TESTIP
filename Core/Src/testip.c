@@ -42,6 +42,15 @@ static PingControlBlock activePing;
 static uint16_t icmpEchoSeq = 1000;
 static char icmpEchoData[ICMP_ECHO_DATA_LEN] = "abcdefghijklmnopqrstuvwxyz data";
 
+static ETH_BufferTypeDef TxEthHdrBuf;
+static ETH_Header TxEthHdr;
+
+static ETH_BufferTypeDef TxIpv4HdrBuf;
+static IPV4_Header TxIpv4Hdr;
+
+static ETH_BufferTypeDef TxUdpHdrBuf;
+static UDP_Header TxUdpHdr;
+
 /* External variables --------------------------------------------------------*/
 extern ETH_TxPacketConfig TxConfig;
 extern ETH_HandleTypeDef heth;
@@ -57,12 +66,45 @@ static void __ProcessARPPacket(uint8_t *arpBuf);
 static void __SendARPPacket(uint8_t mac[6], uint32_t ip, uint16_t oper);
 static uint8_t* __GetNextTxBuffer();
 static uint8_t* __PrepareETHFrame(uint8_t* buf, uint8_t dstMac[6], uint16_t ethertype);
+static void __PrepareETHFrameStruct();
 static uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t protocol, uint32_t dstIp);
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buf, uint16_t len);
 
 /* Public function definitions -----------------------------------------------*/
 void TESTIP_Init() {
 	HAL_ETH_Start_IT(&heth);
+
+	TxEthHdrBuf.buffer = (uint8_t*) &TxEthHdr;
+	TxEthHdrBuf.len = sizeof(TxEthHdr);
+	TxEthHdrBuf.next = NULL;
+	// hdr->dst set dynamically
+	memcpy(TxEthHdr.src, heth.Init.MACAddr, 6);
+	// hdr->ethertype set dynamically
+
+	TxIpv4HdrBuf.buffer = (uint8_t*) &TxIpv4Hdr;
+	TxIpv4HdrBuf.len = sizeof(TxIpv4Hdr);
+	TxIpv4HdrBuf.next = NULL;
+	TxIpv4Hdr.version = 4;
+	TxIpv4Hdr.ihl = 5;
+	TxIpv4Hdr.dscp = 0;
+	TxIpv4Hdr.ecn = 0;
+	// TxIpv4Hdr.len set dynamically
+	TxIpv4Hdr.id = 0;
+	TxIpv4Hdr.frag = htons(IPV4_DF_FLAG);
+	TxIpv4Hdr.ttl = 64;
+	// TxIpv4Hdr.protocol set dynamically
+	// TxIpv4Hdr.checksum set dynamically ??????????????
+	TxIpv4Hdr.src = htonl(myIP);
+	// TxIpv4Hdr.dst set dynamically
+
+	TxUdpHdrBuf.buffer = (uint8_t*) &TxUdpHdr;
+	TxUdpHdrBuf.len = sizeof(TxUdpHdr);
+	TxUdpHdrBuf.next = NULL;
+	TxUdpHdr.srcPort = htons(myPort);
+	// txUdp.dstPort set dynamically
+	// txUdp.len set dynamically
+	// TxUdpHdr.checksum set dynamically ??????????????
+
 	activePing.state = PING_STATE_IDLE;
 }
 
@@ -352,6 +394,10 @@ static inline uint8_t* __PrepareETHFrame(uint8_t* buf, uint8_t dstMac[6], uint16
 	memcpy(hdr->src, heth.Init.MACAddr, 6);
 	hdr->ethertype = htons(ethertype);
 	return buf + sizeof(ETH_Header);
+}
+
+static inline void __PrepareETHFrameStruct() {
+
 }
 
 static inline uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t protocol, uint32_t dstIp) {

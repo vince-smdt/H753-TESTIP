@@ -81,6 +81,8 @@ static void MX_ETH_Init(void);
 /* USER CODE BEGIN 0 */
 uint32_t counterRx = 0;
 uint32_t counterTx = 0;
+uint32_t cycStart = 0;
+uint32_t cycEnd = 0;
 NetAddr ethNetAddr;
 char udpBuf[128];
 /* USER CODE END 0 */
@@ -129,6 +131,10 @@ int main(void)
   MX_ETH_Init();
   /* USER CODE BEGIN 2 */
   TESTIP_Init();
+
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
   ethNetAddr.mac[0] = 0x04;
   ethNetAddr.mac[1] = 0x7C;
@@ -326,6 +332,7 @@ void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len)
 
 void TESTIP_PingCallback(uint32_t ip, PingStatus status, uint32_t rtt_ms) {
 	int len = snprintf(udpBuf, sizeof(udpBuf), "Ping RTT: %lu\n", rtt_ms);
+	cycStart = DWT->CYCCNT;
 	TESTIP_SendUDPPacket(&ethNetAddr, (uint8_t*)udpBuf, len);
 }
 /* USER CODE END 4 */
