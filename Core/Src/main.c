@@ -45,13 +45,13 @@
 #if defined ( __ICCARM__ ) /*!< IAR Compiler */
 #pragma location=0x30000000
 ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
-#pragma location=0x300003C0
+#pragma location=0x30000080
 ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
 
 #elif defined ( __CC_ARM )  /* MDK ARM Compiler */
 
 __attribute__((at(0x30000000))) ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
-__attribute__((at(0x300003C0))) ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
+__attribute__((at(0x30000080))) ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
 
 #elif defined ( __GNUC__ ) /* GNU Compiler */
 
@@ -84,7 +84,6 @@ uint32_t counterTx = 0;
 uint32_t cycStart = 0;
 uint32_t cycEnd = 0;
 NetAddr ethNetAddr;
-char udpBuf[128];
 /* USER CODE END 0 */
 
 /**
@@ -319,21 +318,25 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len) {
-	char buf[128];
-	int strLen = snprintf(buf, sizeof(buf), "Message received: %.*s\n", len, (char*)payload);
+	char* buf = (char*)TESTIP_GetDataPtr();
+	uint16_t bufMaxLen = 128;
+	int strLen = snprintf(buf, bufMaxLen, "Message received: %.*s\n", len, (char*)payload);
 
 	if (strLen == 0) {
 		return; // Problems have occurred...
 	}
 
-	uint16_t rxLen = (strLen >= sizeof(buf)) ? (sizeof(buf) - 1) : (uint16_t)strLen;
-	TESTIP_SendUDPPacket(netAddr, (uint8_t*)buf, rxLen);
+	uint16_t rxLen = (strLen >= bufMaxLen) ? (bufMaxLen - 1) : (uint16_t)strLen;
+	cycStart = DWT->CYCCNT;
+	TESTIP_SendUDPPacket(netAddr, rxLen);
 }
 
 void TESTIP_PingCallback(uint32_t ip, PingStatus status, uint32_t rtt_ms) {
-	int len = snprintf(udpBuf, sizeof(udpBuf), "Ping RTT: %lu\n", rtt_ms);
-	cycStart = DWT->CYCCNT;
-	TESTIP_SendUDPPacket(&ethNetAddr, (uint8_t*)udpBuf, len);
+	char* buf = (char*)TESTIP_GetDataPtr();
+	uint16_t bufMaxLen = 128;
+	int len = snprintf(buf, bufMaxLen, "Ping RTT: %lu\n", rtt_ms);
+
+	TESTIP_SendUDPPacket(&ethNetAddr, len);
 }
 /* USER CODE END 4 */
 

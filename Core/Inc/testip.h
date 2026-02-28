@@ -109,7 +109,7 @@ void TESTIP_Init();
 void TESTIP_Process();
 uint8_t* TESTIP_GetDataPtr();
 void TESTIP_ProcessETHFrame(uint8_t *frame);
-HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint8_t *payload, uint16_t len);
+HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint16_t len);
 HAL_StatusTypeDef TESTIP_Ping(NetAddr *netAddr);
 
 /* Callbacks -----------------------------------------------------------------*/

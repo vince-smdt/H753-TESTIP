@@ -171,13 +171,13 @@ SECTIONS
     . = ABSOLUTE(0x30000000);
     *(.RxDescripSection)
 
-    . = ABSOLUTE(0x300003C0);
+    . = ABSOLUTE(0x30000080);
     *(.TxDescripSection)
     
-    . = ABSOLUTE(0x30000780);
+    . = ABSOLUTE(0x30000100);
     *(.RxBuffSection)
     
-    . = ABSOLUTE(0x3000F780);
+    . = ABSOLUTE(0x30005000);
     *(.TxBuffSection)
   } >RAM_D2
 
