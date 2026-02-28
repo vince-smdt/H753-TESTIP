@@ -54,11 +54,14 @@ static ICMP_Echo_Header TxIcmpEchoHdr __attribute__((section(".TxBuffSection")))
 static ETH_BufferTypeDef TxIcmpEchoDataBuf;
 static uint8_t TxIcmpEchoData[ICMP_ECHO_DATA_LEN] __attribute__((section(".TxBuffSection")));
 
+static ETH_BufferTypeDef TxIcmpEchoReplyBuf;
+static uint8_t TxIcmpEchoReply[IPV4_MAX_DATA_LEN] __attribute__((section(".TxBuffSection"))); // TODO: Change max size
+
 static ETH_BufferTypeDef TxUdpHdrBuf;
 static UDP_Header TxUdpHdr __attribute__((section(".TxBuffSection")));
 
 static ETH_BufferTypeDef TxUdpDataBuf;
-static uint8_t TxUdpData[IPV4_MAX_DATA_LEN] __attribute__((section(".TxBuffSection")));
+static uint8_t TxUdpData[IPV4_MAX_DATA_LEN] __attribute__((section(".TxBuffSection"))); // TODO: Change max size
 
 static ETH_BufferTypeDef TxArpBuf;
 static ARP_Packet TxArp __attribute__((section(".TxBuffSection")));
@@ -129,10 +132,13 @@ void TESTIP_Init() {
 	TxIcmpEchoHdr.id = 0;
 	// seq set dynamically
 
-	TxIcmpEchoDataBuf.buffer = (uint8_t*) TxIcmpEchoData;
+	TxIcmpEchoDataBuf.buffer = TxIcmpEchoData;
 	TxIcmpEchoDataBuf.len = ICMP_ECHO_DATA_LEN;
 	TxIcmpEchoDataBuf.next = NULL;
 	memcpy(TxIcmpEchoData, icmpEchoData, ICMP_ECHO_DATA_LEN);
+
+	TxIcmpEchoReplyBuf.buffer = TxIcmpEchoReply;
+	TxIcmpEchoReplyBuf.next = NULL;
 
 	TxUdpHdrBuf.buffer = (uint8_t*) &TxUdpHdr;
 	TxUdpHdrBuf.len = sizeof(TxUdpHdr);
@@ -330,6 +336,9 @@ static inline void __ProcessICMPEchoReplyPacket(NetAddr *netAddr, uint8_t *icmpB
 	}
 
 	ICMP_Echo_Header *rxIcmp = (ICMP_Echo_Header*) icmpBuf;
+	if (rxIcmp->code != 0) {
+		return; // Invalid code for echo message
+	}
 	if (activePing.id != rxIcmp->id) {
 		return; // Wrong identifier
 	}
@@ -353,19 +362,21 @@ static inline void __ProcessICMPEchoPacket(NetAddr *netAddr, uint8_t *icmpBuf, u
 		return; // Invalid code for echo message
 	}
 
-	uint8_t* txBuf = __GetNextTxBuffer();
-	uint8_t *txIpv4Buf = __PrepareETHFrame(txBuf, netAddr->mac, ETHERTYPE_IPV4);
-	uint8_t *txIcmpBuf = __PrepareIPV4Packet(txIpv4Buf, icmpLen, IPV4_PROTOCOL_ICMP, netAddr->ip);
+	__PrepareETHHeaderStruct(netAddr->mac, ETHERTYPE_IPV4);
+	__PrepareIPV4HeaderStruct(icmpLen, IPV4_PROTOCOL_ICMP, netAddr->ip);
 
-	memcpy(txIcmpBuf, icmpBuf, icmpLen);
+	TxIpv4HdrBuf.next = &TxIcmpEchoReplyBuf;
 
-	ICMP_Echo_Header *txIcmpEcho = (ICMP_Echo_Header*) txIcmpBuf;
-	txIcmpEcho->type = ICMP_TYPE_ECHO_REPLY;
-	txIcmpEcho->checksum = 0;
+	TxIcmpEchoReplyBuf.len = icmpLen;
 
-	uint16_t txBufLen = sizeof(ETH_Header) + sizeof(IPV4_Header) + icmpLen;
+	memcpy(TxIcmpEchoReply, icmpBuf, icmpLen);
 
-	__SendETHFrame((uint8_t*) txBuf, txBufLen);
+	ICMP_Echo_Header* icmpHdr = (ICMP_Echo_Header*) TxIcmpEchoReply;
+	icmpHdr->type = ICMP_TYPE_ECHO_REPLY;
+
+	TxConfig.Length = sizeof(ETH_Header) + sizeof(IPV4_Header) + icmpLen;
+
+	HAL_ETH_Transmit_IT(&heth, &TxConfig);
 }
 
 static inline void __ProcessUDPPacket(NetAddr *netAddr, uint8_t *udpBuf) {
