@@ -5,8 +5,6 @@
 /* External variables --------------------------------------------------------*/
 extern uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE];
 extern uint32_t counterRx;
-extern uint32_t cycStart;
-extern uint32_t cycEnd;
 
 /* Overridden function definitions -------------------------------------------*/
 void HAL_ETH_RxAllocateCallback(uint8_t **buff) {
@@ -29,10 +27,4 @@ void HAL_ETH_RxCpltCallback(ETH_HandleTypeDef *heth) {
 	    uint8_t *frame = (uint8_t *)rx_start;
 	    TESTIP_ProcessETHFrame(frame);
 	}
-}
-
-void HAL_ETH_TxCpltCallback(ETH_HandleTypeDef *heth) {
-	cycEnd = DWT->CYCCNT;
-	uint32_t totCyc = cycEnd - cycStart;
-	volatile uint8_t a = 0;
 }

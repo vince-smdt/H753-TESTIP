@@ -81,8 +81,6 @@ static void MX_ETH_Init(void);
 /* USER CODE BEGIN 0 */
 uint32_t counterRx = 0;
 uint32_t counterTx = 0;
-uint32_t cycStart = 0;
-uint32_t cycEnd = 0;
 NetAddr ethNetAddr;
 /* USER CODE END 0 */
 
@@ -327,7 +325,6 @@ void TESTIP_UDP_RxCpltCallback(NetAddr *netAddr, uint8_t *payload, uint16_t len)
 	}
 
 	uint16_t rxLen = (strLen >= bufMaxLen) ? (bufMaxLen - 1) : (uint16_t)strLen;
-	cycStart = DWT->CYCCNT;
 	TESTIP_SendUDPPacket(netAddr, rxLen);
 }
 

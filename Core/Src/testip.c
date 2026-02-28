@@ -36,11 +36,13 @@
 /* Private variables ---------------------------------------------------------*/
 static uint32_t myIP = MAKE_IPV4_ADDR(192, 168, 0, 100);
 static uint16_t myPort = 55555;
-static ETH_BufferTypeDef Txbuffer;
 static uint8_t TxPoolBufferIdx = 0;
 static PingControlBlock activePing;
 static uint16_t icmpEchoSeq = 1000;
 static char icmpEchoData[ICMP_ECHO_DATA_LEN] = "abcdefghijklmnopqrstuvwxyz data";
+
+static uint32_t cycStart = 0;
+static uint32_t cycEnd = 0;
 
 static ETH_BufferTypeDef TxEthHdrBuf;
 static ETH_Header TxEthHdr __attribute__((section(".TxBuffSection")));
@@ -80,14 +82,11 @@ static void __ProcessUDPPacket(NetAddr *netAddr, uint8_t *udpBuf);
 static void __ProcessARPPacket(uint8_t *arpBuf);
 static HAL_StatusTypeDef __SendARPPacket(uint8_t mac[6], uint32_t ip, uint16_t oper);
 static uint8_t* __GetNextTxBuffer();
-static uint8_t* __PrepareETHFrame(uint8_t* buf, uint8_t dstMac[6], uint16_t ethertype);
 static void __PrepareETHHeaderStruct(uint8_t dst[6], uint16_t ethertype);
 static void __PrepareIPV4HeaderStruct(uint16_t dataLen, uint8_t protocol, uint32_t dstIp);
 static void __PrepareICMPEchoHeaderStruct();
 static void __PrepareUDPHeaderStruct(uint16_t dataLen, uint16_t destPort);
 static void __PrepareARPHeaderStruct(uint8_t mac[6], uint32_t ip, uint16_t oper);
-static uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t protocol, uint32_t dstIp);
-static HAL_StatusTypeDef __SendETHFrame(uint8_t *buf, uint16_t len);
 
 /* Public function definitions -----------------------------------------------*/
 void TESTIP_Init() {
@@ -203,6 +202,8 @@ void TESTIP_ProcessETHFrame(uint8_t *frame) {
 }
 
 HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint16_t len) {
+	cycStart = DWT->CYCCNT;
+
 	__PrepareETHHeaderStruct(netAddr->mac, ETHERTYPE_IPV4);
 	__PrepareIPV4HeaderStruct(sizeof(UDP_Header) + len, IPV4_PROTOCOL_UDP, netAddr->ip);
 	__PrepareUDPHeaderStruct(len, netAddr->port);
@@ -210,7 +211,13 @@ HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint16_t len) {
 	TxUdpDataBuf.len = len;
 	TxConfig.Length = sizeof(ETH_Header) + sizeof(IPV4_Header) + sizeof(UDP_Header) + len;
 
-	return HAL_ETH_Transmit_IT(&heth, &TxConfig);
+	HAL_StatusTypeDef status = HAL_ETH_Transmit_IT(&heth, &TxConfig);
+
+	cycEnd = DWT->CYCCNT;
+	uint32_t totCyc = cycEnd - cycStart;
+	volatile uint8_t a = 0;
+
+	return status;
 }
 
 HAL_StatusTypeDef TESTIP_Ping(NetAddr *netAddr) {
@@ -435,14 +442,6 @@ static inline uint8_t* __GetNextTxBuffer() {
 	return buf;
 }
 
-static inline uint8_t* __PrepareETHFrame(uint8_t* buf, uint8_t dstMac[6], uint16_t ethertype) {
-	ETH_Header *hdr = (ETH_Header*) buf;
-	memcpy(hdr->dst, dstMac, 6);
-	memcpy(hdr->src, heth.Init.MACAddr, 6);
-	hdr->ethertype = htons(ethertype);
-	return buf + sizeof(ETH_Header);
-}
-
 static inline void __PrepareETHHeaderStruct(uint8_t dst[6], uint16_t ethertype) {
 	memcpy(TxEthHdr.dst, dst, 6);
 	TxEthHdr.ethertype = htons(ethertype);
@@ -479,36 +478,4 @@ static inline void __PrepareARPHeaderStruct(uint8_t mac[6], uint32_t ip, uint16_
 	TxArp.tpa = htonl(ip);
 
 	TxEthHdrBuf.next = &TxArpBuf;
-}
-
-static inline uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t protocol, uint32_t dstIp) {
-	IPV4_Header *txIpv4 = (IPV4_Header*) ipv4Buf;
-	txIpv4->version = 4;
-	txIpv4->ihl = 5;
-	txIpv4->dscp = 0;
-	txIpv4->ecn = 0;
-	txIpv4->len = htons(sizeof(IPV4_Header) + dataLen);
-	txIpv4->id = 0;
-	txIpv4->frag = htons(IPV4_DF_FLAG);
-	txIpv4->ttl = 64;
-	txIpv4->protocol = protocol;
-	txIpv4->checksum = 0;
-	txIpv4->src = htonl(myIP);
-	txIpv4->dst = htonl(dstIp);
-	return ipv4Buf + sizeof(IPV4_Header);
-}
-
-static inline HAL_StatusTypeDef __SendETHFrame(uint8_t *buf, uint16_t len) {
-    Txbuffer.buffer = buf;
-    Txbuffer.len = len;
-    Txbuffer.next = NULL;
-
-    memset(&TxConfig, 0, sizeof(TxConfig));
-    TxConfig.Attributes   = ETH_TX_PACKETS_FEATURES_CSUM | ETH_TX_PACKETS_FEATURES_CRCPAD;
-    TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_PAYLOAD_INSERT_PHDR_CALC;
-    TxConfig.CRCPadCtrl   = ETH_CRC_PAD_INSERT;
-    TxConfig.Length       = len;
-    TxConfig.TxBuffer     = &Txbuffer;
-
-    return HAL_ETH_Transmit_IT(&heth, &TxConfig);
 }
