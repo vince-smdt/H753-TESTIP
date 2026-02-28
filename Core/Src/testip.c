@@ -51,6 +51,9 @@ static IPV4_Header TxIpv4Hdr;
 static ETH_BufferTypeDef TxUdpHdrBuf;
 static UDP_Header TxUdpHdr;
 
+static ETH_BufferTypeDef TxUdpDataBuf;
+static uint8_t TxUdpData[IPV4_MAX_DATA_LEN];
+
 /* External variables --------------------------------------------------------*/
 extern ETH_TxPacketConfig TxConfig;
 extern ETH_HandleTypeDef heth;
@@ -66,7 +69,9 @@ static void __ProcessARPPacket(uint8_t *arpBuf);
 static void __SendARPPacket(uint8_t mac[6], uint32_t ip, uint16_t oper);
 static uint8_t* __GetNextTxBuffer();
 static uint8_t* __PrepareETHFrame(uint8_t* buf, uint8_t dstMac[6], uint16_t ethertype);
-static void __PrepareETHFrameStruct();
+static void __PrepareETHHeaderStruct(uint8_t dst[6], uint16_t ethertype);
+static void __PrepareIPV4HeaderStruct(uint16_t dataLen, uint8_t protocol, uint32_t dstIp);
+static void __PrepareUDPHeaderStruct(uint16_t dataLen, uint16_t destPort);
 static uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t protocol, uint32_t dstIp);
 static HAL_StatusTypeDef __SendETHFrame(uint8_t *buf, uint16_t len);
 
@@ -77,9 +82,9 @@ void TESTIP_Init() {
 	TxEthHdrBuf.buffer = (uint8_t*) &TxEthHdr;
 	TxEthHdrBuf.len = sizeof(TxEthHdr);
 	TxEthHdrBuf.next = NULL;
-	// hdr->dst set dynamically
+	// dst set dynamically
 	memcpy(TxEthHdr.src, heth.Init.MACAddr, 6);
-	// hdr->ethertype set dynamically
+	// ethertype set dynamically
 
 	TxIpv4HdrBuf.buffer = (uint8_t*) &TxIpv4Hdr;
 	TxIpv4HdrBuf.len = sizeof(TxIpv4Hdr);
@@ -88,22 +93,26 @@ void TESTIP_Init() {
 	TxIpv4Hdr.ihl = 5;
 	TxIpv4Hdr.dscp = 0;
 	TxIpv4Hdr.ecn = 0;
-	// TxIpv4Hdr.len set dynamically
+	// len set dynamically
 	TxIpv4Hdr.id = 0;
 	TxIpv4Hdr.frag = htons(IPV4_DF_FLAG);
 	TxIpv4Hdr.ttl = 64;
-	// TxIpv4Hdr.protocol set dynamically
-	// TxIpv4Hdr.checksum set dynamically ??????????????
+	// protocol set dynamically
+	// checksum set dynamically ??????????????
 	TxIpv4Hdr.src = htonl(myIP);
-	// TxIpv4Hdr.dst set dynamically
+	// dst set dynamically
 
 	TxUdpHdrBuf.buffer = (uint8_t*) &TxUdpHdr;
 	TxUdpHdrBuf.len = sizeof(TxUdpHdr);
-	TxUdpHdrBuf.next = NULL;
+	TxUdpHdrBuf.next = &TxUdpDataBuf;
 	TxUdpHdr.srcPort = htons(myPort);
-	// txUdp.dstPort set dynamically
-	// txUdp.len set dynamically
-	// TxUdpHdr.checksum set dynamically ??????????????
+	// dstPort set dynamically
+	// len set dynamically
+	// checksum set dynamically ??????????????
+
+	TxUdpDataBuf.buffer = TxUdpData;
+	// len set dynamically
+	TxUdpDataBuf.next = NULL;
 
 	activePing.state = PING_STATE_IDLE;
 }
@@ -113,6 +122,10 @@ void TESTIP_Process() {
 		activePing.state = PING_STATE_IDLE;
 		TESTIP_PingCallback(activePing.targetIp, PING_RES_TIMEOUT, PING_TIMEOUT_MS);
 	}
+}
+
+uint8_t* TESTIP_GetDataPtr() {
+	return TxUdpData;
 }
 
 void TESTIP_ProcessETHFrame(uint8_t *frame) {
@@ -396,8 +409,26 @@ static inline uint8_t* __PrepareETHFrame(uint8_t* buf, uint8_t dstMac[6], uint16
 	return buf + sizeof(ETH_Header);
 }
 
-static inline void __PrepareETHFrameStruct() {
+static inline void __PrepareETHHeaderStruct(uint8_t dst[6], uint16_t ethertype) {
+	memcpy(TxEthHdr.dst, dst, 6);
+	TxEthHdr.ethertype = htons(ethertype);
+}
 
+static inline void __PrepareIPV4HeaderStruct(uint16_t dataLen, uint8_t protocol, uint32_t dstIp) {
+	TxIpv4Hdr.len = htons(sizeof(IPV4_Header) + dataLen);
+	TxIpv4Hdr.protocol = protocol;
+	TxIpv4Hdr.checksum = 0;
+	TxIpv4Hdr.dst = htonl(dstIp);
+
+	TxEthHdrBuf.next = &TxIpv4HdrBuf;
+}
+
+static inline void __PrepareUDPHeaderStruct(uint16_t dataLen, uint16_t destPort) {
+	TxUdpHdr.dstPort = htons(destPort);
+	TxUdpHdr.len = htons(sizeof(UDP_Header) + dataLen);
+	TxUdpHdr.checksum = 0;
+
+	TxIpv4HdrBuf.next = &TxUdpHdrBuf;
 }
 
 static inline uint8_t* __PrepareIPV4Packet(uint8_t* ipv4Buf, uint16_t dataLen, uint8_t protocol, uint32_t dstIp) {
