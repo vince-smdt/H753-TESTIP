@@ -126,7 +126,7 @@ int main(void)
   MX_GPIO_Init();
   MX_ETH_Init();
   /* USER CODE BEGIN 2 */
-  TESTIP_Init();
+  HAL_Delay(1000);
 
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
   DWT->CYCCNT = 0;
@@ -141,8 +141,9 @@ int main(void)
   ethNetAddr.ip = MAKE_IPV4_ADDR(192, 168, 0, 111);
   ethNetAddr.port = 2;
 
-  HAL_Delay(1000);
   uint32_t lastPingTick = HAL_GetTick();
+
+  TESTIP_Init();
 
   // char buf[128] = "hello\n";
 

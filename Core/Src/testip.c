@@ -33,6 +33,12 @@
 
 #define PING_TIMEOUT_MS			3000
 
+/* Public variables ----------------------------------------------------------*/
+uint8_t *rxQueue[RX_BUF_CNT];
+uint8_t rxQueueWriteIdx = 0;
+uint8_t rxQueueReadIdx = 0;
+uint8_t rxQueueSize = 0;
+
 /* Private variables ---------------------------------------------------------*/
 static uint32_t myIP = MAKE_IPV4_ADDR(192, 168, 0, 100);
 static uint16_t myPort = 55555;
@@ -168,6 +174,13 @@ void TESTIP_Process() {
 	if (activePing.state == PING_STATE_PENDING && (HAL_GetTick() - activePing.sentTick) > PING_TIMEOUT_MS) {
 		activePing.state = PING_STATE_IDLE;
 		TESTIP_PingCallback(activePing.targetIp, PING_RES_TIMEOUT, PING_TIMEOUT_MS);
+	}
+
+	while (rxQueueSize) {
+		uint8_t *rxBuf = rxQueue[rxQueueReadIdx];
+		TESTIP_ProcessETHFrame(rxBuf);
+		rxQueueReadIdx = (rxQueueReadIdx + 1) % RX_BUF_CNT;
+		rxQueueSize--;
 	}
 }
 
