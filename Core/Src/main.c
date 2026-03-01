@@ -65,7 +65,6 @@ ETH_HandleTypeDef heth;
 
 /* USER CODE BEGIN PV */
 uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE] __attribute__((section(".RxBuffSection")));
-uint8_t txPool[TX_BUF_CNT][TX_BUF_SIZE] __attribute__((section(".TxBuffSection")));
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -332,6 +331,10 @@ void TESTIP_PingCallback(uint32_t ip, PingStatus status, uint32_t rtt_ms) {
 	char* buf = (char*)TESTIP_GetDataPtr();
 	uint16_t bufMaxLen = 128;
 	int len = snprintf(buf, bufMaxLen, "Ping RTT: %lu\n", rtt_ms);
+
+	if (len == 0) {
+		return;
+	}
 
 	TESTIP_SendUDPPacket(&ethNetAddr, len);
 }

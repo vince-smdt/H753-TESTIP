@@ -36,8 +36,9 @@
 /* Private variables ---------------------------------------------------------*/
 static uint32_t myIP = MAKE_IPV4_ADDR(192, 168, 0, 100);
 static uint16_t myPort = 55555;
-static uint8_t TxPoolBufferIdx = 0;
+
 static PingControlBlock activePing;
+
 static uint16_t icmpEchoSeq = 1000;
 static char icmpEchoData[ICMP_ECHO_DATA_LEN] = "abcdefghijklmnopqrstuvwxyz data";
 
@@ -71,7 +72,6 @@ static ARP_Packet TxArp __attribute__((section(".TxBuffSection")));
 /* External variables --------------------------------------------------------*/
 extern ETH_TxPacketConfig TxConfig;
 extern ETH_HandleTypeDef heth;
-extern uint8_t txPool[TX_BUF_CNT][TX_BUF_SIZE];
 
 /* Private function prototypes -----------------------------------------------*/
 static void __ProcessIPV4Packet(NetAddr *netAddr, uint8_t *ipv4Buf);
@@ -81,12 +81,11 @@ static void __ProcessICMPEchoPacket(NetAddr *netAddr, uint8_t *icmpBuf, uint16_t
 static void __ProcessUDPPacket(NetAddr *netAddr, uint8_t *udpBuf);
 static void __ProcessARPPacket(uint8_t *arpBuf);
 static HAL_StatusTypeDef __SendARPPacket(uint8_t mac[6], uint32_t ip, uint16_t oper);
-static uint8_t* __GetNextTxBuffer();
-static void __PrepareETHHeaderStruct(uint8_t dst[6], uint16_t ethertype);
-static void __PrepareIPV4HeaderStruct(uint16_t dataLen, uint8_t protocol, uint32_t dstIp);
-static void __PrepareICMPEchoHeaderStruct();
-static void __PrepareUDPHeaderStruct(uint16_t dataLen, uint16_t destPort);
-static void __PrepareARPHeaderStruct(uint8_t mac[6], uint32_t ip, uint16_t oper);
+static void __PrepareETHHeader(uint8_t dst[6], uint16_t ethertype);
+static void __PrepareIPV4Header(uint16_t dataLen, uint8_t protocol, uint32_t dstIp);
+static void __PrepareICMPEchoHeader();
+static void __PrepareUDPHeader(uint16_t dataLen, uint16_t destPort);
+static void __PrepareARPHeader(uint8_t mac[6], uint32_t ip, uint16_t oper);
 
 /* Public function definitions -----------------------------------------------*/
 void TESTIP_Init() {
@@ -201,9 +200,9 @@ void TESTIP_ProcessETHFrame(uint8_t *frame) {
 HAL_StatusTypeDef TESTIP_SendUDPPacket(NetAddr *netAddr, uint16_t len) {
 	cycStart = DWT->CYCCNT;
 
-	__PrepareETHHeaderStruct(netAddr->mac, ETHERTYPE_IPV4);
-	__PrepareIPV4HeaderStruct(sizeof(UDP_Header) + len, IPV4_PROTOCOL_UDP, netAddr->ip);
-	__PrepareUDPHeaderStruct(len, netAddr->port);
+	__PrepareETHHeader(netAddr->mac, ETHERTYPE_IPV4);
+	__PrepareIPV4Header(sizeof(UDP_Header) + len, IPV4_PROTOCOL_UDP, netAddr->ip);
+	__PrepareUDPHeader(len, netAddr->port);
 
 	TxUdpDataBuf.len = len;
 	TxConfig.Length = sizeof(ETH_Header) + sizeof(IPV4_Header) + sizeof(UDP_Header) + len;
@@ -224,9 +223,9 @@ HAL_StatusTypeDef TESTIP_Ping(NetAddr *netAddr) {
 
 	icmpEchoSeq++;
 
-	__PrepareETHHeaderStruct(netAddr->mac, ETHERTYPE_IPV4);
-	__PrepareIPV4HeaderStruct(sizeof(ICMP_Echo_Header) + ICMP_ECHO_DATA_LEN, IPV4_PROTOCOL_ICMP, netAddr->ip);
-	__PrepareICMPEchoHeaderStruct();
+	__PrepareETHHeader(netAddr->mac, ETHERTYPE_IPV4);
+	__PrepareIPV4Header(sizeof(ICMP_Echo_Header) + ICMP_ECHO_DATA_LEN, IPV4_PROTOCOL_ICMP, netAddr->ip);
+	__PrepareICMPEchoHeader();
 
 	TxConfig.Length = sizeof(ETH_Header) + sizeof(IPV4_Header) + sizeof(ICMP_Echo_Header) + ICMP_ECHO_DATA_LEN;
 
@@ -366,8 +365,8 @@ static inline void __ProcessICMPEchoPacket(NetAddr *netAddr, uint8_t *icmpBuf, u
 		return; // Invalid code for echo message
 	}
 
-	__PrepareETHHeaderStruct(netAddr->mac, ETHERTYPE_IPV4);
-	__PrepareIPV4HeaderStruct(icmpLen, IPV4_PROTOCOL_ICMP, netAddr->ip);
+	__PrepareETHHeader(netAddr->mac, ETHERTYPE_IPV4);
+	__PrepareIPV4Header(icmpLen, IPV4_PROTOCOL_ICMP, netAddr->ip);
 
 	TxIpv4HdrBuf.next = &TxIcmpEchoReplyBuf;
 
@@ -425,26 +424,20 @@ static inline void __ProcessARPPacket(uint8_t *arpBuf) {
 }
 
 static inline HAL_StatusTypeDef __SendARPPacket(uint8_t mac[6], uint32_t ip, uint16_t oper) {
-	__PrepareETHHeaderStruct(mac, ETHERTYPE_ARP);
-	__PrepareARPHeaderStruct(mac, ip, oper);
+	__PrepareETHHeader(mac, ETHERTYPE_ARP);
+	__PrepareARPHeader(mac, ip, oper);
 
 	TxConfig.Length = sizeof(ETH_Header) + sizeof(ARP_Packet);
 
 	return HAL_ETH_Transmit_IT(&heth, &TxConfig);
 }
 
-static inline uint8_t* __GetNextTxBuffer() {
-	uint8_t *buf = txPool[TxPoolBufferIdx];
-	TxPoolBufferIdx = (TxPoolBufferIdx + 1) % TX_BUF_CNT;
-	return buf;
-}
-
-static inline void __PrepareETHHeaderStruct(uint8_t dst[6], uint16_t ethertype) {
+static inline void __PrepareETHHeader(uint8_t dst[6], uint16_t ethertype) {
 	memcpy(TxEthHdr.dst, dst, 6);
 	TxEthHdr.ethertype = htons(ethertype);
 }
 
-static inline void __PrepareIPV4HeaderStruct(uint16_t dataLen, uint8_t protocol, uint32_t dstIp) {
+static inline void __PrepareIPV4Header(uint16_t dataLen, uint8_t protocol, uint32_t dstIp) {
 	TxIpv4Hdr.len = htons(sizeof(IPV4_Header) + dataLen);
 	TxIpv4Hdr.protocol = protocol;
 	TxIpv4Hdr.dst = htonl(dstIp);
@@ -452,21 +445,22 @@ static inline void __PrepareIPV4HeaderStruct(uint16_t dataLen, uint8_t protocol,
 	TxEthHdrBuf.next = &TxIpv4HdrBuf;
 }
 
-static inline void __PrepareICMPEchoHeaderStruct() {
+static inline void __PrepareICMPEchoHeader() {
 	TxIcmpEchoHdr.seq = icmpEchoSeq;
 
 	TxIpv4HdrBuf.next = &TxIcmpEchoHdrBuf;
 }
 
-static inline void __PrepareUDPHeaderStruct(uint16_t dataLen, uint16_t destPort) {
+static inline void __PrepareUDPHeader(uint16_t dataLen, uint16_t destPort) {
 	TxUdpHdr.dstPort = htons(destPort);
 	TxUdpHdr.len = htons(sizeof(UDP_Header) + dataLen);
 
 	TxUdpDataBuf.len = dataLen;
+
 	TxIpv4HdrBuf.next = &TxUdpHdrBuf;
 }
 
-static inline void __PrepareARPHeaderStruct(uint8_t mac[6], uint32_t ip, uint16_t oper) {
+static inline void __PrepareARPHeader(uint8_t mac[6], uint32_t ip, uint16_t oper) {
 	TxArp.oper = htons(oper);
 	memcpy(TxArp.tha, mac, 6);
 	TxArp.tpa = htonl(ip);
