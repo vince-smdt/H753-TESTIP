@@ -3,10 +3,10 @@
 #include "main.h"
 
 /* External variables --------------------------------------------------------*/
-extern uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE];
 extern uint32_t counterRx;
 
-extern uint8_t* rxQueue[RX_BUF_CNT];
+extern uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE];
+extern uint8_t* rxPoolStatus[RX_BUF_CNT];
 extern uint8_t rxQueueWriteIdx;
 extern uint8_t rxQueueReadIdx;
 extern uint8_t rxQueueSize;
@@ -34,7 +34,7 @@ void HAL_ETH_RxCpltCallback(ETH_HandleTypeDef *heth) {
 	    TESTIP_ProcessETHFrame(frame);
 	}*/
 
-	uint8_t **rxBufPtr = &rxQueue[rxQueueWriteIdx];
+	uint8_t **rxBufPtr = &rxPoolStatus[rxQueueWriteIdx];
 	if (HAL_ETH_ReadData(heth, (void**)rxBufPtr) == HAL_OK) {
 		rxQueueWriteIdx = (rxQueueWriteIdx + 1) % RX_BUF_CNT;
 		rxQueueSize++;

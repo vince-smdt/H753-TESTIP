@@ -14,7 +14,12 @@
 #define RX_BUF_CNT  4
 
 /* Structs -------------------------------------------------------------------*/
-typedef struct __attribute__((packed)) {
+typedef enum {
+	BUF_FREE,
+	BUF_OWNED
+} BufStatus;
+
+typedef struct {
 	uint8_t mac[6];
 	uint32_t ip;
 	uint16_t port;

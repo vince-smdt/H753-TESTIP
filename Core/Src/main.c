@@ -64,7 +64,7 @@ ETH_TxPacketConfig TxConfig;
 ETH_HandleTypeDef heth;
 
 /* USER CODE BEGIN PV */
-uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE] __attribute__((section(".RxBuffSection")));
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/

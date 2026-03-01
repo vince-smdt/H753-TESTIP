@@ -34,7 +34,8 @@
 #define PING_TIMEOUT_MS			3000
 
 /* Public variables ----------------------------------------------------------*/
-uint8_t *rxQueue[RX_BUF_CNT];
+uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE] __attribute__((section(".RxBuffSection")));
+uint8_t *rxPoolStatus[RX_BUF_CNT];
 uint8_t rxQueueWriteIdx = 0;
 uint8_t rxQueueReadIdx = 0;
 uint8_t rxQueueSize = 0;
@@ -177,7 +178,7 @@ void TESTIP_Process() {
 	}
 
 	while (rxQueueSize) {
-		uint8_t *rxBuf = rxQueue[rxQueueReadIdx];
+		uint8_t *rxBuf = rxPoolStatus[rxQueueReadIdx];
 		TESTIP_ProcessETHFrame(rxBuf);
 		rxQueueReadIdx = (rxQueueReadIdx + 1) % RX_BUF_CNT;
 		rxQueueSize--;
