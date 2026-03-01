@@ -118,7 +118,6 @@ void TESTIP_Init() {
 	TxIpv4Hdr.frag = htons(IPV4_DF_FLAG);
 	TxIpv4Hdr.ttl = 64;
 	// protocol set dynamically
-	// checksum set dynamically ??????????????
 	TxIpv4Hdr.src = htonl(myIP);
 	// dst set dynamically
 
@@ -127,7 +126,6 @@ void TESTIP_Init() {
 	TxIcmpEchoHdrBuf.next = &TxIcmpEchoDataBuf;
 	TxIcmpEchoHdr.type = ICMP_TYPE_ECHO;
 	TxIcmpEchoHdr.code = ICMP_CODE_ECHO;
-	// checksum set dynamically ??????????????
 	TxIcmpEchoHdr.id = 0;
 	// seq set dynamically
 
@@ -145,7 +143,6 @@ void TESTIP_Init() {
 	TxUdpHdr.srcPort = htons(myPort);
 	// dstPort set dynamically
 	// len set dynamically
-	// checksum set dynamically ??????????????
 
 	TxUdpDataBuf.buffer = TxUdpData;
 	// len set dynamically
@@ -450,14 +447,12 @@ static inline void __PrepareETHHeaderStruct(uint8_t dst[6], uint16_t ethertype) 
 static inline void __PrepareIPV4HeaderStruct(uint16_t dataLen, uint8_t protocol, uint32_t dstIp) {
 	TxIpv4Hdr.len = htons(sizeof(IPV4_Header) + dataLen);
 	TxIpv4Hdr.protocol = protocol;
-	TxIpv4Hdr.checksum = 0;
 	TxIpv4Hdr.dst = htonl(dstIp);
 
 	TxEthHdrBuf.next = &TxIpv4HdrBuf;
 }
 
 static inline void __PrepareICMPEchoHeaderStruct() {
-	TxIcmpEchoHdr.checksum = 0;
 	TxIcmpEchoHdr.seq = icmpEchoSeq;
 
 	TxIpv4HdrBuf.next = &TxIcmpEchoHdrBuf;
@@ -466,7 +461,6 @@ static inline void __PrepareICMPEchoHeaderStruct() {
 static inline void __PrepareUDPHeaderStruct(uint16_t dataLen, uint16_t destPort) {
 	TxUdpHdr.dstPort = htons(destPort);
 	TxUdpHdr.len = htons(sizeof(UDP_Header) + dataLen);
-	TxUdpHdr.checksum = 0;
 
 	TxUdpDataBuf.len = dataLen;
 	TxIpv4HdrBuf.next = &TxUdpHdrBuf;
