@@ -35,9 +35,7 @@
 
 /* Public variables ----------------------------------------------------------*/
 uint8_t rxPool[RX_BUF_CNT][RX_BUF_SIZE] __attribute__((section(".RxBuffSection")));
-uint8_t *rxPoolStatus[RX_BUF_CNT];
-uint8_t rxQueueWriteIdx = 0;
-uint8_t rxQueueReadIdx = 0;
+BufStatus rxBufStatus[RX_BUF_CNT];
 uint8_t rxQueueSize = 0;
 
 /* Private variables ---------------------------------------------------------*/
@@ -97,6 +95,12 @@ static void __PrepareARPHeader(uint8_t mac[6], uint32_t ip, uint16_t oper);
 /* Public function definitions -----------------------------------------------*/
 void TESTIP_Init() {
 	HAL_ETH_Start_IT(&heth);
+
+	for (uint8_t i = 0; i < RX_BUF_CNT; i++) {
+		rxBufStatus[i] = BUF_FREE;
+	}
+
+	activePing.state = PING_STATE_IDLE;
 
     memset(&TxConfig, 0, sizeof(TxConfig));
     TxConfig.Attributes   = ETH_TX_PACKETS_FEATURES_CSUM | ETH_TX_PACKETS_FEATURES_CRCPAD;
@@ -166,22 +170,29 @@ void TESTIP_Init() {
 	TxArp.spa = htonl(myIP);
 	// tha set dynamically
 	// tpa set dynamically
-
-
-	activePing.state = PING_STATE_IDLE;
 }
 
 void TESTIP_Process() {
+	static uint32_t rxBufReadIdx = 0;
+
 	if (activePing.state == PING_STATE_PENDING && (HAL_GetTick() - activePing.sentTick) > PING_TIMEOUT_MS) {
 		activePing.state = PING_STATE_IDLE;
 		TESTIP_PingCallback(activePing.targetIp, PING_RES_TIMEOUT, PING_TIMEOUT_MS);
 	}
 
 	while (rxQueueSize) {
-		uint8_t *rxBuf = rxPoolStatus[rxQueueReadIdx];
-		TESTIP_ProcessETHFrame(rxBuf);
-		rxQueueReadIdx = (rxQueueReadIdx + 1) % RX_BUF_CNT;
-		rxQueueSize--;
+		if (rxBufStatus[rxBufReadIdx] == BUF_OWNED_CPU) {
+			uint8_t *rxBuf = rxPool[rxBufReadIdx];
+
+			TESTIP_ProcessETHFrame(rxBuf);
+
+			rxBufStatus[rxBufReadIdx] = BUF_FREE;
+
+			__disable_irq();
+			rxQueueSize--;
+			__enable_irq();
+		}
+		rxBufReadIdx = (rxBufReadIdx + 1) % RX_BUF_CNT;
 	}
 }
 

@@ -16,7 +16,8 @@
 /* Structs -------------------------------------------------------------------*/
 typedef enum {
 	BUF_FREE,
-	BUF_OWNED
+	BUF_OWNED_CPU,
+	BUF_OWNED_DMA
 } BufStatus;
 
 typedef struct {
